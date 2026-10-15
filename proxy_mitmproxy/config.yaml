@@ -1,0 +1,29 @@
+name: Proxy mitmproxy
+version: "1.0.0"
+slug: proxy_mitmproxy
+description: Proxy HTTPS (image officielle mitmproxy) pour inspecter le trafic d'un appareil du réseau local.
+url: https://github.com/jonathanbeaudry/homeassistant-dreamelawnmower/tree/ha-addons/proxy_mitmproxy
+arch:
+  - amd64
+  - aarch64
+init: false
+startup: application
+boot: manual
+ports:
+  8080/tcp: 8080
+  8081/tcp: 8081
+ports_description:
+  8080/tcp: Proxy (à mettre dans le Wi-Fi du téléphone)
+  8081/tcp: Interface web mitmweb
+map:
+  - share:rw
+options:
+  sauvegarder: true
+  fichier: /share/mitmproxy/flows
+  mot_de_passe_web: ""
+  arguments: ""
+schema:
+  sauvegarder: bool
+  fichier: str
+  mot_de_passe_web: password?
+  arguments: str?
