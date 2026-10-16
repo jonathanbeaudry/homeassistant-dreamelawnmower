@@ -165,11 +165,18 @@ class _DreameLawnMowerClientTrackingMixin(_DreameLawnMowerClientTransport):
         The one owner of this decision for the camera, the interactive overlay
         and position readers. Call it under the runtime geometry lock.
         """
+        if self._runtime_geometry_map_index not in (None, map_index):
+            return position
         deadline = self._runtime_map_identity_expires_at
-        if not (
-            deadline is not None and deadline.timestamp() > time.time()
-            and self._runtime_geometry_map_index in (None, map_index)
-            and self._observed_map_geometry == (map_index, geometry)
+        if deadline is not None and deadline.timestamp() > time.time():
+            if self._observed_map_geometry != (map_index, geometry):
+                return position
+        elif (
+            # A mower docked since startup never gets a lease. Its station,
+            # already bound to the current map revision by the caller, is
+            # accepted on this frame unless other evidence binds another.
+            self._observed_map_geometry not in (None, (map_index, geometry))
+            or self._position_tracker.geometry not in (None, geometry)
         ):
             return position
         return position_at_charger(
