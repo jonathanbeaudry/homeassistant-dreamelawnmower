@@ -26,6 +26,9 @@ from custom_components.dreame_lawn_mower.device_tracker import (
 from custom_components.dreame_lawn_mower.dreame_lawn_mower_client.map_inventory import (  # noqa: E501
     selected_map_revision,
 )
+from custom_components.dreame_lawn_mower.dreame_lawn_mower_client.map_visuals import (  # noqa: E501
+    map_render_style,
+)
 from custom_components.dreame_lawn_mower.dreame_lawn_mower_client.position_tracking import (  # noqa: E501
     MowerPosition,
 )
@@ -403,14 +406,42 @@ def test_docked_since_startup_without_telemetry_sits_on_the_station() -> None:
     assert position.details()["position_source"] == details["position_source"]
 
 
-def test_unverified_map_identity_places_no_station_for_any_reader() -> None:
-    """Without a verified map identity neither the camera nor the reader docks."""
+def test_docked_without_lease_sits_on_the_current_revision_station() -> None:
+    """Measured at home: docked since restart, no lease, yesterday's pose kept."""
     client = _docked_client(verified=False)
+    # Yesterday's pose survives the restart as labelled history on this frame.
+    client._sync_get_vector_map_details()
+    client._position_tracker._last = MowerPosition(
+        90, 20, None, datetime.now(UTC).timestamp() - 3600, 0, "current"
+    )
+
+    details = client._sync_get_vector_map_details()
+    position = client.current_map_position()
+    scene = client._sync_get_mowing_map_scene(
+        map_index=0, style=map_render_style(), label_scale=1,
+    )
+    overlay = client.mowing_map_runtime_overlay(scene)
+
+    assert details["position_status"] == "known_dock"
+    assert (details["position_x"], details["position_y"]) == (40, 30)
+    assert (position.x, position.y, position.status) == (40, 30, "known_dock")
+    assert overlay["position_status"] == "known_dock"
+    assert (overlay["position"]["x"], overlay["position"]["y"]) == (
+        scene.projection.point(40, 30)
+    )
+
+
+def test_docked_without_lease_ignores_a_station_of_another_revision() -> None:
+    client = _docked_client(verified=False)
+    client._charger_history = ZoneMowingHistory(
+        chargers={"summary": ChargerPosition(40, 30, 0, 1, "c" * 32)}
+    )
 
     details = client._sync_get_vector_map_details()
     position = client.current_map_position()
 
     assert details["position_status"] != "known_dock"
+    assert details["charger_x"] is None
     assert (position.status if position else "unavailable") == (
         details["position_status"]
     )
