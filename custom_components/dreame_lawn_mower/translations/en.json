@@ -139,7 +139,10 @@
           "recovery_minutes": "Latest recovery, from original scheduled start (0 = disabled)",
           "interruption": "If garden permission is lost while mowing",
           "resume_when_allowed": "Automatically resume this automation’s paused task",
-          "notify_outcome": "Show outcome notifications"
+          "notify_outcome": "Show outcome notifications",
+          "mowing_target": "What to mow",
+          "rotation_rest_days": "Rest days between mowings of a zone (rotation, 0 = once a day)",
+          "rotation_max_area": "Maximum area per start (rotation, 0 = no limit)"
         }
       },
       "mowing_review": {
@@ -237,6 +240,12 @@
         "none": "No action",
         "pause": "Pause this task",
         "dock": "End this task and dock"
+      }
+    },
+    "mowing_target": {
+      "options": {
+        "all": "Whole lawn",
+        "rotation": "Due zones, least recently mowed first"
       }
     }
   },

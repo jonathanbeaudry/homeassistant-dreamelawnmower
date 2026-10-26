@@ -12,6 +12,7 @@ from homeassistant.helpers import selector
 from .mowing_automation_config import (
     AUTOMATION_SCHEMA,
     CONF_MOWING_AUTOMATION,
+    MOWING_TARGET_OPTIONS,
     automation_config,
 )
 from .runtime_data import DreameLawnMowerConfigEntry
@@ -121,6 +122,8 @@ class MowingAutomationOptionsFlow(OptionsFlow):
             ("minimum_battery", 20, 100, "%"),
             ("defer_minutes", 0, 1440, "min"),
             ("recovery_minutes", 0, 1440, "min"),
+            ("rotation_rest_days", 0, 30, "d"),
+            ("rotation_max_area", 0, 100000, "m²"),
         ):
             schema[vol.Required(key, default=data[key])] = selector.NumberSelector(
                 selector.NumberSelectorConfig(
@@ -135,6 +138,15 @@ class MowingAutomationOptionsFlow(OptionsFlow):
                 selector.SelectSelectorConfig(
                     options=["none", "pause", "dock"],
                     translation_key="mowing_interruption",
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            )
+        )
+        schema[vol.Required("mowing_target", default=data["mowing_target"])] = (
+            selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=MOWING_TARGET_OPTIONS,
+                    translation_key="mowing_target",
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
             )
