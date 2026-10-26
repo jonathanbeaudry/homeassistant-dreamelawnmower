@@ -139,7 +139,10 @@
           "recovery_minutes": "Última reanudación desde el inicio previsto (0 = desactivada)",
           "interruption": "Si se pierde el permiso durante el corte",
           "resume_when_allowed": "Reanudar automáticamente la tarea pausada por esta automatización",
-          "notify_outcome": "Mostrar notificaciones de resultado"
+          "notify_outcome": "Mostrar notificaciones de resultado",
+          "mowing_target": "Qué cortar",
+          "rotation_rest_days": "Días de descanso entre dos cortes de una zona (rotación, 0 = una vez al día)",
+          "rotation_max_area": "Superficie máxima por inicio (rotación, 0 = sin límite)"
         }
       },
       "mowing_review": {
@@ -237,6 +240,12 @@
         "none": "Ninguna acción",
         "pause": "Pausar esta tarea",
         "dock": "Finalizar y volver a la base"
+      }
+    },
+    "mowing_target": {
+      "options": {
+        "all": "Todo el césped",
+        "rotation": "Zonas pendientes, primero la cortada hace más tiempo"
       }
     }
   },

@@ -24,6 +24,8 @@ from .const import DOMAIN
 from .managed_mowing_state import TASK_SCHEMA
 from .mowing_automation_config import CONF_MOWING_AUTOMATION, automation_config
 from .mowing_conditions import MowingConditions
+from .sensor_zone_history import current_zone_overview
+from .zone_rotation import due_zone_ids
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -157,23 +159,54 @@ class MowingAutomation:
         try:
             self._evaluate()
             occurrence = dt_util.utcnow().strftime("%Y-%m-%dT%H:%M")
-            params = TASK_SCHEMA(
-                {
-                    "task_type": "all",
-                    "minimum_battery": self.config["minimum_battery"],
-                    "permission_entity": self.entities["permission"].entity_id,
-                    "permission_max_age": 60,
-                    "defer_minutes": self.config["defer_minutes"],
-                    "interruption": self.config["interruption"],
-                    "resume_when_allowed": self.config["resume_when_allowed"],
-                    "recovery_minutes": self.config["recovery_minutes"],
-                    "automation_entity": self.entities["enabled"].entity_id,
-                    "run_id": f"ui:{self.coordinator.entry.entry_id}:{occurrence}",
-                }
-            )
-            await manager.async_request(params)
+            request: dict[str, Any] = {
+                "task_type": "all",
+                "minimum_battery": self.config["minimum_battery"],
+                "permission_entity": self.entities["permission"].entity_id,
+                "permission_max_age": 60,
+                "defer_minutes": self.config["defer_minutes"],
+                "interruption": self.config["interruption"],
+                "resume_when_allowed": self.config["resume_when_allowed"],
+                "recovery_minutes": self.config["recovery_minutes"],
+                "automation_entity": self.entities["enabled"].entity_id,
+                "run_id": f"ui:{self.coordinator.entry.entry_id}:{occurrence}",
+            }
+            if self.config["mowing_target"] == "rotation":
+                selection = self._rotation_target()
+                if isinstance(selection, str):
+                    manager.skip(
+                        dict(request, task_type="zone", zone_ids=[]), selection
+                    )
+                    return
+                request.update(selection)
+            await manager.async_request(TASK_SCHEMA(request))
         finally:
             self._run_task = None
+
+    def _rotation_target(self) -> dict[str, Any] | str:
+        """Due whole zones of the selected map, or why none can be chosen."""
+        coordinator = self.coordinator
+        history = getattr(coordinator, "zone_mowing_sessions", None)
+        map_index = getattr(coordinator, "selected_map_index", None)
+        if (
+            history is None
+            or not history.complete
+            or not history.attributable
+            or type(map_index) is not int
+        ):
+            return "zone_history_unavailable"
+        overview = current_zone_overview(coordinator)
+        if not overview:
+            return "zone_history_unavailable"
+        zone_ids = due_zone_ids(
+            overview,
+            rest_days=self.config["rotation_rest_days"],
+            max_area=self.config["rotation_max_area"],
+            today=dt_util.now().date(),
+        )
+        if not zone_ids:
+            return "no_zone_due"
+        return {"task_type": "zone", "zone_ids": zone_ids, "map_index": map_index}
 
     @callback
     def _outcome(self, event: Event) -> None:

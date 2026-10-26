@@ -139,7 +139,10 @@
           "recovery_minutes": "Najpóźniejsze wznowienie od planowanego startu (0 = wyłączone)",
           "interruption": "Po utracie zezwolenia podczas koszenia",
           "resume_when_allowed": "Automatycznie wznów zadanie wstrzymane przez tę automatyzację",
-          "notify_outcome": "Pokazuj powiadomienia o wyniku"
+          "notify_outcome": "Pokazuj powiadomienia o wyniku",
+          "mowing_target": "Co kosić",
+          "rotation_rest_days": "Dni przerwy między koszeniami strefy (rotacja, 0 = raz dziennie)",
+          "rotation_max_area": "Maksymalna powierzchnia na jedno uruchomienie (rotacja, 0 = bez limitu)"
         }
       },
       "mowing_review": {
@@ -237,6 +240,12 @@
         "none": "Bez działania",
         "pause": "Wstrzymaj to zadanie",
         "dock": "Zakończ zadanie i wróć do stacji"
+      }
+    },
+    "mowing_target": {
+      "options": {
+        "all": "Cały trawnik",
+        "rotation": "Strefy do koszenia, najdawniej koszona pierwsza"
       }
     }
   },

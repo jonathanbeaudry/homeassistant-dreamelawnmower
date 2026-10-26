@@ -139,7 +139,10 @@
           "recovery_minutes": "Dernière reprise depuis le départ prévu (0 = désactivée)",
           "interruption": "En cas de perte d’autorisation pendant la tonte",
           "resume_when_allowed": "Reprendre automatiquement la tâche suspendue par cette automatisation",
-          "notify_outcome": "Afficher les notifications de résultat"
+          "notify_outcome": "Afficher les notifications de résultat",
+          "mowing_target": "Quoi tondre",
+          "rotation_rest_days": "Jours de repos entre deux tontes d’une zone (rotation, 0 = une fois par jour)",
+          "rotation_max_area": "Surface maximale par départ (rotation, 0 = sans limite)"
         }
       },
       "mowing_review": {
@@ -237,6 +240,12 @@
         "none": "Aucune action",
         "pause": "Suspendre cette tâche",
         "dock": "Terminer et rentrer à la base"
+      }
+    },
+    "mowing_target": {
+      "options": {
+        "all": "Toute la pelouse",
+        "rotation": "Zones dues, la moins récemment tondue d’abord"
       }
     }
   },

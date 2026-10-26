@@ -81,6 +81,9 @@ async def test_visual_wizard_saves_without_yaml_and_keeps_other_options(hass):
             "interruption": "none",
             "resume_when_allowed": False,
             "notify_outcome": True,
+            "mowing_target": "rotation",
+            "rotation_rest_days": 1,
+            "rotation_max_area": 300,
         },
     )
     assert result["step_id"] == "mowing_review"
@@ -95,6 +98,9 @@ async def test_visual_wizard_saves_without_yaml_and_keeps_other_options(hass):
     assert saved["enabled"] is False
     assert saved["defer_minutes"] == saved["recovery_minutes"] == 0
     assert saved["interruption"] == "none"
+    assert saved["mowing_target"] == "rotation"
+    assert saved["rotation_rest_days"] == 1
+    assert saved["rotation_max_area"] == 300
 
 
 @requires_ui
@@ -402,3 +408,121 @@ async def test_real_entities_drive_one_guarded_run_or_cancel_without_movement(
         await manager.async_close()
         await sensors.async_remove_entity(permission.entity_id)
         await switches.async_remove_entity(enabled.entity_id)
+
+
+def _rotation_runtime(hass, monkeypatch, *, overview, history=True, **settings):
+    manager = SimpleNamespace(async_request=AsyncMock(), skip=Mock())
+    coordinator = SimpleNamespace(
+        hass=hass,
+        entry=SimpleNamespace(entry_id="garden"),
+        managed_mowing=manager,
+        async_update_listeners=Mock(),
+        selected_map_index=0,
+        zone_mowing_sessions=SimpleNamespace(complete=True, attributable=True)
+        if history
+        else None,
+    )
+    monkeypatch.setattr(
+        "custom_components.dreame_lawn_mower.mowing_automation.current_zone_overview",
+        lambda _: overview,
+    )
+    runtime = MowingAutomation(
+        coordinator,
+        config(enabled=True, native_plans_disabled=True, **settings),
+    )
+    runtime.entities = {
+        "permission": SimpleNamespace(
+            entity_id="binary_sensor.garden_permission", async_write_ha_state=Mock()
+        ),
+        "enabled": SimpleNamespace(entity_id="switch.garden_automation"),
+    }
+    return runtime, manager
+
+
+async def test_rotation_requests_only_due_whole_zones_on_the_selected_map(
+    hass, monkeypatch
+):
+    overview = [
+        {"zone_id": 4, "last_completed_at": None, "area_m2": 70},
+        {
+            "zone_id": 1,
+            "last_completed_at": "2026-01-01T10:00:00+00:00",
+            "area_m2": 200,
+        },
+        {"zone_id": 2, "last_completed_at": "2026-01-01T11:00:00+00:00", "area_m2": 40},
+        {"zone_id": 6, "last_completed_at": dt_util.utcnow().isoformat(), "area_m2": 9},
+    ]
+    runtime, manager = _rotation_runtime(
+        hass,
+        monkeypatch,
+        overview=overview,
+        mowing_target="rotation",
+        rotation_rest_days=1,
+        rotation_max_area=300,
+    )
+    await runtime._run({})
+    manager.skip.assert_not_called()
+    params = manager.async_request.call_args.args[0]
+    assert params["task_type"] == "zone"
+    assert params["zone_ids"] == [4, 1]
+    assert params["map_index"] == 0
+    assert params["automation_entity"] == "switch.garden_automation"
+
+
+@pytest.mark.parametrize(
+    ("overview", "history", "reason"),
+    [
+        (
+            [{"zone_id": 1, "last_completed_at": None, "area_m2": 10}],
+            False,
+            "zone_history_unavailable",
+        ),
+        ([], True, "zone_history_unavailable"),
+        (
+            [{"zone_id": 1, "last_completed_at": "TODAY", "area_m2": 10}],
+            True,
+            "no_zone_due",
+        ),
+    ],
+)
+async def test_rotation_skips_with_a_reason_and_never_falls_back_to_the_whole_lawn(
+    hass, monkeypatch, overview, history, reason
+):
+    overview = [
+        dict(item, last_completed_at=dt_util.utcnow().isoformat())
+        if item["last_completed_at"] == "TODAY"
+        else item
+        for item in overview
+    ]
+    runtime, manager = _rotation_runtime(
+        hass, monkeypatch, overview=overview, history=history, mowing_target="rotation"
+    )
+    await runtime._run({})
+    manager.async_request.assert_not_called()
+    params, skipped = manager.skip.call_args.args
+    assert skipped == reason
+    assert params["task_type"] == "zone"
+    assert params["zone_ids"] == []
+    assert params["automation_entity"] == "switch.garden_automation"
+
+
+async def test_whole_lawn_stays_the_default_target(hass, monkeypatch):
+    runtime, manager = _rotation_runtime(hass, monkeypatch, overview=[])
+    assert runtime.config["mowing_target"] == "all"
+    await runtime._run({})
+    params = manager.async_request.call_args.args[0]
+    assert params["task_type"] == "all"
+    assert "zone_ids" not in params
+    manager.skip.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"mowing_target": "zones"},
+        {"rotation_rest_days": -1},
+        {"rotation_max_area": float("inf")},
+    ],
+)
+def test_invalid_rotation_settings_are_rejected(value):
+    assert automation_config({"schedule_entity": "schedule.garden", **value}) == {}

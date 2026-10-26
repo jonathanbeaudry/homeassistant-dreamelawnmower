@@ -139,7 +139,10 @@
           "recovery_minutes": "Ultima ripresa dall’avvio previsto (0 = disabilitata)",
           "interruption": "Se il permesso viene perso durante il taglio",
           "resume_when_allowed": "Riprendi automaticamente l’attività sospesa da questa automazione",
-          "notify_outcome": "Mostra notifiche del risultato"
+          "notify_outcome": "Mostra notifiche del risultato",
+          "mowing_target": "Cosa tagliare",
+          "rotation_rest_days": "Giorni di riposo tra due tagli di una zona (rotazione, 0 = una volta al giorno)",
+          "rotation_max_area": "Superficie massima per avvio (rotazione, 0 = nessun limite)"
         }
       },
       "mowing_review": {
@@ -237,6 +240,12 @@
         "none": "Nessuna azione",
         "pause": "Sospendi questa attività",
         "dock": "Termina e torna alla base"
+      }
+    },
+    "mowing_target": {
+      "options": {
+        "all": "Tutto il prato",
+        "rotation": "Zone in scadenza, prima quella tagliata da più tempo"
       }
     }
   },

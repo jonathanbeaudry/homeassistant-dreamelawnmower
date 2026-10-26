@@ -44,6 +44,9 @@ from custom_components.dreame_lawn_mower.dreame_lawn_mower_client.models import 
     DreameLawnMowerDescriptor,
     DreameLawnMowerSnapshot,
 )
+from custom_components.dreame_lawn_mower.mowing_automation_config import (
+    MOWING_TARGET_OPTIONS,
+)
 from custom_components.dreame_lawn_mower.sensor import SENSORS
 from tests.test_notification_blueprint import _substituted_automation
 
@@ -174,6 +177,7 @@ def test_localized_selector_options_match_runtime_values() -> None:
         "video_transport": VIDEO_TRANSPORT_OPTIONS,
         "xp2p_runner_mode": XP2P_RUNNER_MODE_OPTIONS,
         "mowing_interruption": {"none", "pause", "dock"},
+        "mowing_target": MOWING_TARGET_OPTIONS,
     }
 
     assert selectors.keys() == expected_options.keys()

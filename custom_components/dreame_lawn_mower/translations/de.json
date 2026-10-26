@@ -89,7 +89,10 @@
           "recovery_minutes": "Späteste Fortsetzung ab geplantem Start (0 = deaktiviert)",
           "interruption": "Bei Verlust der Freigabe während des Mähens",
           "resume_when_allowed": "Von dieser Automatik pausierte Aufgabe automatisch fortsetzen",
-          "notify_outcome": "Ergebnisbenachrichtigungen anzeigen"
+          "notify_outcome": "Ergebnisbenachrichtigungen anzeigen",
+          "mowing_target": "Was gemäht wird",
+          "rotation_rest_days": "Ruhetage zwischen zwei Mähvorgängen einer Zone (Rotation, 0 = einmal täglich)",
+          "rotation_max_area": "Maximale Fläche pro Start (Rotation, 0 = unbegrenzt)"
         }
       },
       "mowing_review": {
@@ -125,6 +128,12 @@
         "none": "Keine Aktion",
         "pause": "Diese Aufgabe pausieren",
         "dock": "Aufgabe beenden und andocken"
+      }
+    },
+    "mowing_target": {
+      "options": {
+        "all": "Gesamter Rasen",
+        "rotation": "Fällige Zonen, am längsten nicht gemähte zuerst"
       }
     }
   },

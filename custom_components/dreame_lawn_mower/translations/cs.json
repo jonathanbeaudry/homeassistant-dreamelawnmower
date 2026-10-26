@@ -140,7 +140,10 @@
           "recovery_minutes": "Nejzazší obnovení od plánovaného startu (0 = vypnuto)",
           "interruption": "Při ztrátě povolení během sečení",
           "resume_when_allowed": "Automaticky obnovit úlohu pozastavenou touto automatizací",
-          "notify_outcome": "Zobrazovat oznámení výsledků"
+          "notify_outcome": "Zobrazovat oznámení výsledků",
+          "mowing_target": "Co sekat",
+          "rotation_rest_days": "Dny odpočinku mezi dvěma sečeními zóny (rotace, 0 = jednou denně)",
+          "rotation_max_area": "Maximální plocha na jedno spuštění (rotace, 0 = bez omezení)"
         }
       },
       "mowing_review": {
@@ -238,6 +241,12 @@
         "none": "Žádná akce",
         "pause": "Pozastavit tuto úlohu",
         "dock": "Ukončit úlohu a vrátit se do stanice"
+      }
+    },
+    "mowing_target": {
+      "options": {
+        "all": "Celý trávník",
+        "rotation": "Zóny na řadě, nejdéle nesečená první"
       }
     }
   },
