@@ -81,7 +81,7 @@ def bounded_runtime_trail(
 if TYPE_CHECKING:
     from .models import DreameLawnMowerSnapshot
     from .position_tracking import MowerPosition, MowerPositionTracker
-    from .zone_mowing_history import ZoneMowingHistory
+    from .zone_mowing_history import ZoneBoundaries, ZoneMowingHistory
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +118,7 @@ class _DreameLawnMowerClientTrackingMixin(_DreameLawnMowerClientTransport):
 
     _charger_history: ZoneMowingHistory | None
     _map_lineage: dict[str, str]
+    _map_zone_boundaries: dict[str, ZoneBoundaries]
     _position_tracker: MowerPositionTracker
     _latest_runtime_status_blob: DreameLawnMowerStatusBlob | None
     _runtime_map_identity_expires_at: datetime | None

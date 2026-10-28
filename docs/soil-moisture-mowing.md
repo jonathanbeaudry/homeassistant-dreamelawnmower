@@ -131,6 +131,11 @@ The start is skipped, never widened to the whole lawn, when no zone is due
 (`zone_history_unavailable`). A zone counts as mowed only when a session
 summary confirms its completion; an interrupted zone stays due.
 
+Editing the map in the vendor app (renaming a zone, moving a path) saves a new
+map revision. A zone whose boundary is unchanged point for point keeps its
+mowing history across that revision; an edited or re-drawn zone starts
+without history and is due at once.
+
 The mower's `mowing_automation` attribute includes a `plan`: the next block
 start and the zones it would request if it began then. It uses the same
 selection as the start itself; permission, battery and native checks still

@@ -93,6 +93,10 @@ def charger_position(summary: Any) -> ChargerPosition | None:
     )
 
 
+# Lawn-zone boundaries by zone ID, in drawable map units.
+ZoneBoundaries = dict[int, tuple[tuple[int, int], ...]]
+
+
 @dataclass(frozen=True)
 class ZoneGeometry:
     """Lawn zone boundaries one summary reported, in drawable map units."""
@@ -245,6 +249,30 @@ def record_map_lineage(
         lineage.pop(revision, None)
     else:
         lineage[revision] = ancestor
+
+
+def record_zone_boundaries(
+    boundaries: dict[str, ZoneBoundaries],
+    app_maps: Any,
+    map_index: int,
+    zones: Iterable[tuple[int, int, Sequence[tuple[int, int]]]],
+) -> None:
+    """Keep the admitted lawn-zone boundaries of the current verified revision.
+
+    ``latest_zone_mowing`` compares them with each summary's own boundaries.
+    Only the current revision is kept.
+    """
+    revision = selected_map_revision(app_maps, map_index)
+    if revision is None:
+        return
+    current = {
+        zone_id: tuple((int(x), int(y)) for x, y in points)
+        for zone_id, zone_type, points in zones
+        if zone_type == 0 and len(points) >= 3
+    }
+    boundaries.clear()
+    if current:
+        boundaries[revision] = current
 
 
 def lineage_render_matches_history(
@@ -405,18 +433,40 @@ def latest_zone_mowing(
     sessions: Mapping[str, tuple[ZoneMowingRecord, ...]],
     *,
     map_hash: str | None = None,
+    geometries: Mapping[str, ZoneGeometry] | None = None,
+    current_zones: Mapping[int, tuple[tuple[int, int], ...]] | None = None,
 ) -> dict[int, dict[str, ZoneMowingRecord | None]]:
-    """Return outcomes only for the requested verified map revision."""
+    """Return outcomes for the requested verified map revision.
+
+    An app edit saves a new revision, which has no summary until a session runs
+    on it. An outcome from an older revision still counts for a zone whose
+    boundary in that summary equals the zone's admitted current boundary, point
+    for point; an edited, re-drawn or unknown zone starts without history.
+    """
     revision = map_revision_hash(map_hash)
     if revision is None:
         return {}
+
+    def counts(name: str, record: ZoneMowingRecord) -> bool:
+        if record.map_hash == revision:
+            return True
+        geometry = (geometries or {}).get(name)
+        current = (current_zones or {}).get(record.zone_id)
+        return (
+            current is not None
+            and geometry is not None
+            and record.map_hash is not None
+            and geometry.map_hash == record.map_hash
+            and geometry.zones.get(record.zone_id) == current
+        )
+
     result: dict[int, dict[str, ZoneMowingRecord | None]] = {}
     ordered = sorted(
         (
             record
-            for records in sessions.values()
+            for name, records in sessions.items()
             for record in records
-            if record.map_hash == revision
+            if counts(name, record)
         ),
         key=lambda record: (
             record.ended_at if record.ended_at is not None else record.started_at or 0

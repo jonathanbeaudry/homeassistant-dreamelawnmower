@@ -506,3 +506,24 @@ def test_camera_render_context_changes_when_current_station_arrives():
     assert initial != missing
     # Camera preview scope remains portable, primitive data.
     assert json.loads(json.dumps(initial))[-1] == [20, 40, HASH]
+
+
+def test_admitted_geometry_keeps_the_current_zone_boundaries():
+    from custom_components.dreame_lawn_mower.dreame_lawn_mower_client.zone_mowing_history import (  # noqa: E501
+        ZoneMowingRecord,
+        latest_zone_mowing,
+    )
+
+    client = docked_client()
+    client._charger_history = lineage_history()
+    resaved_view(client)
+    assert client._map_zone_boundaries == {RESAVED: {1: FRONT_YARD}}
+    # The same boundaries let the zone history cross the app re-save.
+    record = ZoneMowingRecord(1, 2, 1, 2, 100, "new", OTHER_HASH)
+    latest = latest_zone_mowing(
+        {"new": (record,)},
+        map_hash=RESAVED,
+        geometries=client._charger_history.geometries,
+        current_zones=client._map_zone_boundaries[RESAVED],
+    )
+    assert latest[1]["completed"] == record

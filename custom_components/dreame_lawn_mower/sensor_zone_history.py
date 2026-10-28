@@ -13,6 +13,7 @@ from .dreame_lawn_mower_client.map_inventory import (
     selected_map_revision as selected_map_revision,
 )
 from .dreame_lawn_mower_client.zone_mowing_history import (
+    ZoneGeometry,
     ZoneMowingRecord,
     latest_zone_mowing,
 )
@@ -30,13 +31,20 @@ def zone_mowing_overview(
     sessions: Mapping[str, tuple[ZoneMowingRecord, ...]] | None,
     *,
     map_hash: str | None = None,
+    geometries: Mapping[str, ZoneGeometry] | None = None,
+    current_zones: Mapping[int, tuple[tuple[int, int], ...]] | None = None,
 ) -> list[dict[str, Any]]:
     """Return the current map's zones, least recently completed first.
 
     A zone with no completed mowing in the recent sessions comes first, in zone
     order; the others follow from the oldest completion to the newest.
     """
-    latest = latest_zone_mowing(sessions or {}, map_hash=map_hash)
+    latest = latest_zone_mowing(
+        sessions or {},
+        map_hash=map_hash,
+        geometries=geometries,
+        current_zones=current_zones,
+    )
     overview: list[dict[str, Any]] = []
     for zone in zones:
         zone_id = zone.get("area_id")
@@ -80,12 +88,18 @@ def current_zone_overview(coordinator: Any) -> list[dict[str, Any]]:
         selected_map_index=coordinator.selected_map_index,
     )
     history = coordinator.zone_mowing_sessions
+    revision = selected_map_revision(
+        coordinator.app_maps, coordinator.selected_map_index
+    )
+    boundaries = getattr(
+        getattr(coordinator, "client", None), "_map_zone_boundaries", None
+    )
     return zone_mowing_overview(
         zones,
         history.sessions if history is not None else None,
-        map_hash=selected_map_revision(
-            coordinator.app_maps, coordinator.selected_map_index
-        ),
+        map_hash=revision,
+        geometries=history.geometries if history is not None else None,
+        current_zones=(boundaries or {}).get(revision) if revision else None,
     )
 
 

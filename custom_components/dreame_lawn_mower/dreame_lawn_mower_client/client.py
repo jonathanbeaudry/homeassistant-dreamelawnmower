@@ -25,7 +25,7 @@ from requests.exceptions import Timeout as _RequestsTimeout
 
 if _typing.TYPE_CHECKING:
     from .device import DreameMowerDevice
-    from .zone_mowing_history import ZoneMowingHistory
+    from .zone_mowing_history import ZoneBoundaries, ZoneMowingHistory
 
 from . import client_camera as _client_camera
 from . import client_constants as _client_constants
@@ -581,6 +581,8 @@ class DreameLawnMowerClient(
         self._charger_history: ZoneMowingHistory | None = None
         # Current revision -> summarized ancestor proven by unchanged geometry.
         self._map_lineage: dict[str, str] = {}
+        # Admitted lawn-zone boundaries of the current verified revision.
+        self._map_zone_boundaries: dict[str, ZoneBoundaries] = {}
         self._runtime_geometry_revision = 0
         self._runtime_geometry_map_index: int | None = None
         self._observed_map_geometry: tuple[int, str] | None = None

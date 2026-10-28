@@ -9,7 +9,11 @@ from typing import TYPE_CHECKING, Any
 from .map_inventory import selected_map_revision
 from .position_tracking import MowerPosition, map_position_identity, snapshot_is_docked
 from .vector_map import position_within_vector_map, with_charger
-from .zone_mowing_history import record_map_lineage, reported_charger_for_map
+from .zone_mowing_history import (
+    record_map_lineage,
+    record_zone_boundaries,
+    reported_charger_for_map,
+)
 
 if TYPE_CHECKING:
     from .client_tracking import _DreameLawnMowerClientTrackingMixin
@@ -31,11 +35,16 @@ def current_map_with_charger(
         ):
             return with_charger(vector_map, None)
         if observe_lineage:
+            zones = [
+                (zone.zone_id, zone.zone_type, zone.points)
+                for zone in vector_map.zones
+            ]
             record_map_lineage(
                 client._map_lineage, client._charger_history, app_maps,
-                vector_map.map_index,
-                ((zone.zone_id, zone.zone_type, zone.points)
-                 for zone in vector_map.zones),
+                vector_map.map_index, zones,
+            )
+            record_zone_boundaries(
+                client._map_zone_boundaries, app_maps, vector_map.map_index, zones,
             )
         return with_charger(vector_map, reported_charger_for_map(
             client._charger_history, app_maps, vector_map.map_index,

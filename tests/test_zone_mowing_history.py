@@ -10,10 +10,12 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from custom_components.dreame_lawn_mower.dreame_lawn_mower_client.zone_mowing_history import (  # noqa: E501
+    ZoneGeometry,
     ZoneMowingHistory,
     ZoneMowingRecord,
     async_get_zone_mowing_records,
     latest_zone_mowing,
+    record_zone_boundaries,
     zone_mowing_records,
 )
 from custom_components.dreame_lawn_mower.sensor_zone_history import (
@@ -750,3 +752,54 @@ def test_overview_carries_each_zone_area() -> None:
         (1, 120.5),
         (2, None),
     ]
+
+
+def _outcome(zone_id: int, ended: int, revision: str, status: int = 2):
+    return ZoneMowingRecord(zone_id, status, ended - 600, ended, 100, "s", revision)
+
+
+SQUARE = ((0, 0), (100, 0), (100, 100), (0, 100))
+EDITED = ((0, 0), (90, 0), (90, 90), (0, 90))
+RESAVED = "c" * 32
+
+
+def test_unchanged_zone_keeps_its_history_after_an_app_re_save():
+    sessions = {"old": (_outcome(1, 1000, HASH), _outcome(2, 1000, HASH))}
+    geometries = {"old": ZoneGeometry(HASH, {1: SQUARE, 2: EDITED}, 1000)}
+    current = {1: SQUARE, 2: SQUARE}
+    latest = latest_zone_mowing(
+        sessions, map_hash=RESAVED, geometries=geometries, current_zones=current
+    )
+    # Zone 1 kept its boundary; zone 2 was edited, so its old outcome is foreign.
+    assert latest[1]["completed"] == sessions["old"][0]
+    assert 2 not in latest
+    # Without the current boundaries nothing crosses the revision, as before.
+    assert latest_zone_mowing(sessions, map_hash=RESAVED, geometries=geometries) == {}
+    # A summary without decoded geometry proves nothing either.
+    assert latest_zone_mowing(
+        sessions, map_hash=RESAVED, geometries={}, current_zones=current
+    ) == {}
+
+
+def test_own_revision_outcomes_still_count_and_newest_wins():
+    sessions = {
+        "old": (_outcome(1, 1000, HASH),),
+        "new": (_outcome(1, 2000, RESAVED, status=1),),
+    }
+    geometries = {"old": ZoneGeometry(HASH, {1: SQUARE}, 1000)}
+    latest = latest_zone_mowing(
+        sessions, map_hash=RESAVED, geometries=geometries, current_zones={1: SQUARE}
+    )
+    assert latest[1]["latest"] == sessions["new"][0]
+    assert latest[1]["completed"] == sessions["old"][0]
+
+
+def test_current_boundaries_are_kept_for_the_verified_revision_only():
+    boundaries: dict = {"stale": {9: SQUARE}}
+    maps = _maps()
+    zones = [(1, 0, list(SQUARE)), (201, 1, list(SQUARE)), (3, 0, [(0, 0), (1, 1)])]
+    record_zone_boundaries(boundaries, maps, 0, zones)
+    assert boundaries == {HASH: {1: SQUARE}}
+    maps["maps"][0]["hash_match"] = False
+    record_zone_boundaries(boundaries, maps, 0, zones)
+    assert boundaries == {HASH: {1: SQUARE}}
