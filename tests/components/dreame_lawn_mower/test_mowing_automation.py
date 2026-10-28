@@ -1139,3 +1139,79 @@ async def test_runtime_reads_the_mower_do_not_disturb_window(hass, monkeypatch):
     runtime._evaluate()
     assert runtime.permitted is False
     assert runtime.reason == "Mower Do Not Disturb until 08:00"
+
+
+async def test_a_start_waits_for_zone_history_within_the_wait_window(
+    hass, monkeypatch
+):
+    runtime, manager = _continuation_runtime(
+        hass, monkeypatch, defer_minutes=30, continue_in_block=True
+    )
+    runtime.coordinator.zone_mowing_sessions = None
+    await runtime._run({"trigger": {"platform": "schedule"}})
+    manager.async_request.assert_not_called()
+    manager.skip.assert_not_called()
+    assert runtime.summary["waiting_for_history_until"] is not None
+    # Still reloading: nothing yet.
+    runtime._evaluate()
+    await hass.async_block_till_done()
+    manager.async_request.assert_not_called()
+    # History is back: the held start goes ahead.
+    runtime.coordinator.zone_mowing_sessions = SimpleNamespace(
+        complete=True, attributable=True
+    )
+    runtime._evaluate()
+    await hass.async_block_till_done()
+    assert manager.async_request.await_count == 1
+    assert manager.async_request.call_args.args[0]["zone_ids"] == [1]
+    assert runtime.summary["waiting_for_history_until"] is None
+
+
+async def test_a_start_held_for_history_is_skipped_once_the_window_passes(
+    hass, monkeypatch
+):
+    runtime, manager = _continuation_runtime(hass, monkeypatch, defer_minutes=30)
+    runtime.coordinator.zone_mowing_sessions = None
+    await runtime._run({"trigger": {"platform": "schedule"}})
+    later = dt_util.utcnow() + timedelta(minutes=31)
+    monkeypatch.setattr(
+        "custom_components.dreame_lawn_mower.mowing_automation.dt_util.utcnow",
+        lambda: later,
+    )
+    runtime._evaluate()
+    await hass.async_block_till_done()
+    manager.async_request.assert_not_called()
+    assert manager.skip.call_args.args[1] == "zone_history_unavailable"
+    assert runtime.summary["waiting_for_history_until"] is None
+
+
+async def test_without_a_wait_window_missing_history_still_skips_at_once(
+    hass, monkeypatch
+):
+    runtime, manager = _continuation_runtime(hass, monkeypatch, defer_minutes=0)
+    runtime.coordinator.zone_mowing_sessions = None
+    await runtime._run({"trigger": {"platform": "schedule"}})
+    assert manager.skip.call_args.args[1] == "zone_history_unavailable"
+
+
+async def test_the_mowers_own_unfinished_task_arms_the_next_start(hass, monkeypatch):
+    runtime, manager = _continuation_runtime(
+        hass, monkeypatch, continue_in_block=True, battery=50
+    )
+    await runtime._run({"trigger": {"platform": "schedule"}})
+    _finished(runtime, status="skipped", reason="resumable_or_unknown_task")
+    # Charging below the minimum, then away finishing its own task: nothing.
+    runtime._evaluate()
+    runtime.coordinator.data.docked = False
+    runtime.coordinator.data.activity = "mowing"
+    runtime.coordinator.data.battery_level = 85
+    runtime._evaluate()
+    await hass.async_block_till_done()
+    assert manager.async_request.await_count == 1
+    # Back on the dock and charged: this block starts again.
+    runtime.coordinator.data.docked = True
+    runtime.coordinator.data.activity = "docked"
+    runtime._evaluate()
+    await hass.async_block_till_done()
+    assert manager.async_request.await_count == 2
+    assert manager.async_request.call_args.args[0]["run_id"].endswith(":c1")

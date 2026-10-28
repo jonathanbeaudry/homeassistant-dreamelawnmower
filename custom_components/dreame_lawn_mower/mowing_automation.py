@@ -6,7 +6,7 @@ import asyncio
 import logging
 from collections.abc import Callable
 from copy import deepcopy
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import voluptuous as vol
@@ -39,6 +39,8 @@ from .zone_rotation import due_zone_ids, rotation_zones
 _LOGGER = logging.getLogger(__name__)
 # Starts after recharge within one Schedule block, at most this many times.
 MAX_BLOCK_CONTINUATIONS = 8
+# A skipped start that leaves the mower finishing its own unfinished task.
+_NATIVE_TASK_PENDING = "resumable_or_unknown_task"
 # A continuation ends on any outcome other than these.
 _CONTINUATION_KEEPS = frozenset({"submitted", "started", "deferred", "paused"})
 
@@ -87,6 +89,9 @@ class MowingAutomation:
         self._continuation_block: str | None = None
         self._continuation_armed = False
         self._continuations = 0
+        # Deadline of a start waiting for zone history after an integration
+        # reload, and whether that start was a continuation.
+        self._history_wait: tuple[datetime, bool] | None = None
 
     @callback
     def bind(self, kind: str, entity: Any) -> None:
@@ -175,6 +180,7 @@ class MowingAutomation:
             permission.async_write_ha_state()
         if previous != (self.permitted, self.reason):
             self.coordinator.async_update_listeners()
+        self._maybe_retry_history()
         self._maybe_continue()
 
     async def _run(self, variables: dict[str, Any], context: Any = None) -> None:
@@ -210,6 +216,11 @@ class MowingAutomation:
             }
             if self.config["mowing_target"] == "rotation":
                 selection = self._rotation_target()
+                if selection == "zone_history_unavailable" and self._wait_for_history(
+                    continuation
+                ):
+                    return
+                self._history_wait = None
                 if isinstance(selection, str):
                     manager.skip(
                         dict(request, task_type="zone", zone_ids=[]), selection
@@ -227,6 +238,46 @@ class MowingAutomation:
             return None
         end = state.attributes.get("next_event")
         return str(end) if end else "open"
+
+    def _wait_for_history(self, continuation: bool) -> bool:
+        """Hold a start while zone history reloads, within the wait window.
+
+        An integration reload or restart leaves zone history unread for a few
+        minutes; a start falling in that gap waits for it like any deferred
+        start, and is skipped once the wait window has passed.
+        """
+        wait = self.config["defer_minutes"]
+        if wait <= 0:
+            return False
+        now = dt_util.utcnow()
+        if self._history_wait is None:
+            self._history_wait = (now + timedelta(minutes=wait), continuation)
+            self.coordinator.async_update_listeners()
+            return True
+        if now < self._history_wait[0]:
+            return True
+        self._history_wait = None
+        return False
+
+    @callback
+    def _maybe_retry_history(self) -> None:
+        """Resume a start held for zone history once it is readable or late."""
+        if (
+            self._history_wait is None
+            or self._closed
+            or not self.enabled
+            or self._run_task is not None
+        ):
+            return
+        deadline, continuation = self._history_wait
+        if (
+            dt_util.utcnow() < deadline
+            and self._rotation_target() == "zone_history_unavailable"
+        ):
+            return
+        self.hass.async_create_task(
+            self._run({"continuation": continuation}), "mowing automation history wait"
+        )
 
     @callback
     def _maybe_continue(self) -> None:
@@ -326,7 +377,12 @@ class MowingAutomation:
             for key in ("status", "reason", "detail", "observed_at")
         }
         status = event.data.get("status")
-        if status == "finished":
+        native_pending = (
+            status == "skipped" and event.data.get("reason") == _NATIVE_TASK_PENDING
+        )
+        if status == "finished" or native_pending:
+            # A finished run, or the mower still finishing its own unfinished
+            # task (native resume after charging), lets this block start again.
             block = self._current_block()
             self._continuation_armed = bool(
                 self.config.get("continue_in_block")
@@ -349,6 +405,7 @@ class MowingAutomation:
     async def async_cancel_owned(self) -> None:
         """Revoke only this wizard's intent before replacing its configuration."""
         self.enabled = False
+        self._history_wait = None
         owner = self.entities.get("enabled")
         if owner is not None:
             owner.async_write_ha_state()
@@ -525,6 +582,9 @@ class MowingAutomation:
                 "armed": self._continuation_armed,
                 "count": self._continuations,
             },
+            "waiting_for_history_until": (
+                self._history_wait[0].isoformat() if self._history_wait else None
+            ),
         }
 
     async def async_close(self) -> None:

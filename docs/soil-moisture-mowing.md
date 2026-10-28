@@ -138,6 +138,10 @@ The `mowing_automation` attribute
 lists every zone in `rotation_zones` with its rest days and the date it is due
 again (`due_on`; empty means due now).
 
+Right after an integration reload or restart, zone history takes a few
+minutes to read. With a wait window above zero, a start in that gap waits for
+it instead of being skipped, and is skipped only once the window has passed.
+
 The start is skipped, never widened to the whole lawn, when no zone is due
 (`no_zone_due`) or the history is incomplete or not tied to the current map
 (`zone_history_unavailable`). A zone counts as mowed only when a session
@@ -156,6 +160,10 @@ One start per Schedule block may not cover the whole lawn, for example when
 the wait and recovery step: when a run of this automation finishes while its
 block is open, it starts again once the mower is docked with at least the
 minimum battery, choosing the zones still due.
+
+A start skipped because the mower is still finishing its own unfinished
+task (for example after recharging, with native resume enabled) also lets the
+block start again once the mower is back on the dock with the minimum battery.
 
 Each new start goes through the same guarded checks as the first. It stops
 when no zone is due, when the block ends, after a skipped, failed, cancelled
