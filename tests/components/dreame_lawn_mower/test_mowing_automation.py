@@ -961,3 +961,119 @@ async def test_zone_frequency_rejects_an_overtaken_map_request(hass, monkeypatch
     with pytest.raises(HomeAssistantError):
         await runtime.async_set_zone_rest_days(77, 0)
     assert entry.options == before
+
+
+def _continuation_runtime(hass, monkeypatch, *, battery=90, docked=True, **settings):
+    overview = [
+        {"zone_id": 1, "label": "Back", "last_completed_at": None, "area_m2": 50}
+    ]
+    runtime, manager = _rotation_runtime(
+        hass,
+        monkeypatch,
+        overview=overview,
+        mowing_target="rotation",
+        minimum_battery=80,
+        **settings,
+    )
+    runtime.coordinator.data = SimpleNamespace(
+        available=True,
+        docked=docked,
+        activity="docked" if docked else "mowing",
+        battery_level=battery,
+    )
+    hass.states.async_set(
+        "schedule.garden", "on", {"next_event": "2026-10-28T21:00:00-04:00"}
+    )
+    return runtime, manager
+
+
+def _finished(runtime, status="finished", reason="managed_task_no_longer_active"):
+    runtime._outcome(
+        SimpleNamespace(
+            data={
+                "automation_entity": "switch.garden_automation",
+                "status": status,
+                "reason": reason,
+            }
+        )
+    )
+
+
+async def test_a_finished_run_starts_again_in_the_same_open_block(hass, monkeypatch):
+    runtime, manager = _continuation_runtime(
+        hass, monkeypatch, continue_in_block=True, battery=40
+    )
+    await runtime._run({"trigger": {"platform": "schedule"}})
+    assert manager.async_request.await_count == 1
+    _finished(runtime)
+    # Charging: below the minimum battery nothing starts yet.
+    runtime._evaluate()
+    await hass.async_block_till_done()
+    assert manager.async_request.await_count == 1
+    runtime.coordinator.data.battery_level = 85
+    runtime._evaluate()
+    await hass.async_block_till_done()
+    assert manager.async_request.await_count == 2
+    params = manager.async_request.call_args.args[0]
+    assert params["run_id"].endswith(":c1")
+    assert params["zone_ids"] == [1]
+    assert runtime.summary["continuation"] == {"armed": False, "count": 1}
+    # One finished run arms exactly one continuation.
+    runtime._evaluate()
+    await hass.async_block_till_done()
+    assert manager.async_request.await_count == 2
+
+
+@pytest.mark.parametrize(
+    "case", ["option_off", "block_ended", "next_block", "skipped", "failed", "away"]
+)
+async def test_continuation_stops_rather_than_guessing(hass, monkeypatch, case):
+    runtime, manager = _continuation_runtime(
+        hass,
+        monkeypatch,
+        continue_in_block=case != "option_off",
+        docked=case != "away",
+    )
+    await runtime._run({"trigger": {"platform": "schedule"}})
+    if case == "skipped":
+        _finished(runtime)
+        _finished(runtime, status="skipped", reason="no_zone_due")
+    elif case == "failed":
+        _finished(runtime)
+        _finished(runtime, status="failed", reason="command_failed")
+    else:
+        _finished(runtime)
+    if case == "block_ended":
+        hass.states.async_set("schedule.garden", "off", {"next_event": None})
+    if case == "next_block":
+        hass.states.async_set(
+            "schedule.garden", "on", {"next_event": "2026-10-29T21:00:00-04:00"}
+        )
+    runtime._evaluate()
+    await hass.async_block_till_done()
+    assert manager.async_request.await_count == 1
+
+
+async def test_continuations_are_bounded_per_block_and_reset_by_a_new_block(
+    hass, monkeypatch
+):
+    from custom_components.dreame_lawn_mower.mowing_automation import (
+        MAX_BLOCK_CONTINUATIONS,
+    )
+
+    runtime, manager = _continuation_runtime(hass, monkeypatch, continue_in_block=True)
+    await runtime._run({"trigger": {"platform": "schedule"}})
+    for _ in range(MAX_BLOCK_CONTINUATIONS + 2):
+        _finished(runtime)
+        runtime._evaluate()
+        await hass.async_block_till_done()
+    assert manager.async_request.await_count == 1 + MAX_BLOCK_CONTINUATIONS
+    hass.states.async_set(
+        "schedule.garden", "on", {"next_event": "2026-10-29T21:00:00-04:00"}
+    )
+    await runtime._run({"trigger": {"platform": "schedule"}})
+    assert runtime.summary["continuation"]["count"] == 0
+    _finished(runtime)
+    runtime._evaluate()
+    await hass.async_block_till_done()
+    assert manager.async_request.await_count == 3 + MAX_BLOCK_CONTINUATIONS

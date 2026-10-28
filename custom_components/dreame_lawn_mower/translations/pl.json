@@ -139,6 +139,7 @@
           "recovery_minutes": "Najpóźniejsze wznowienie od planowanego startu (0 = wyłączone)",
           "interruption": "Po utracie zezwolenia podczas koszenia",
           "resume_when_allowed": "Automatycznie wznów zadanie wstrzymane przez tę automatyzację",
+          "continue_in_block": "Ponownie wyruszyć po naładowaniu, dopóki blok harmonogramu jest otwarty",
           "notify_outcome": "Pokazuj powiadomienia o wyniku"
         }
       },

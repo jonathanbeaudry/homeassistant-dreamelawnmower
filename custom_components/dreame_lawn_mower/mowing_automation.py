@@ -22,6 +22,7 @@ from homeassistant.helpers.trigger import (
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
+from .dreame_lawn_mower_client.position_tracking import snapshot_is_docked
 from .managed_mowing_state import TASK_SCHEMA
 from .mowing_automation_config import (
     CONF_MOWING_AUTOMATION,
@@ -35,6 +36,11 @@ from .sensor_zone_history import current_zone_overview, selected_map_revision
 from .zone_rotation import due_zone_ids, rotation_zones
 
 _LOGGER = logging.getLogger(__name__)
+# Starts after recharge within one Schedule block, at most this many times.
+MAX_BLOCK_CONTINUATIONS = 8
+# A continuation ends on any outcome other than these.
+_CONTINUATION_KEEPS = frozenset({"submitted", "started", "deferred", "paused"})
+
 # Settings controls may bind too; only these three gate the schedule trigger.
 REQUIRED_BINDINGS = frozenset({"permission", "enabled", "mower"})
 
@@ -75,6 +81,11 @@ class MowingAutomation:
         self._run_task: asyncio.Task[Any] | None = None
         self._trigger_error: str | None = None
         self.last_outcome: dict[str, Any] | None = None
+        # Block end (the Schedule's next_event while on) of the continuation
+        # armed by a finished run, and how many continuations that block had.
+        self._continuation_block: str | None = None
+        self._continuation_armed = False
+        self._continuations = 0
 
     @callback
     def bind(self, kind: str, entity: Any) -> None:
@@ -161,10 +172,17 @@ class MowingAutomation:
             permission.async_write_ha_state()
         if previous != (self.permitted, self.reason):
             self.coordinator.async_update_listeners()
+        self._maybe_continue()
 
     async def _run(self, variables: dict[str, Any], context: Any = None) -> None:
         if self._closed or not self.enabled or self._run_task is not None:
             return
+        continuation = bool(variables.get("continuation"))
+        if not continuation:
+            # A real block start begins a new block: no continuation yet.
+            self._continuation_block = self._current_block()
+            self._continuation_armed = False
+            self._continuations = 0
         manager = getattr(self.coordinator, "managed_mowing", None)
         if manager is None:
             return
@@ -182,7 +200,10 @@ class MowingAutomation:
                 "resume_when_allowed": self.config["resume_when_allowed"],
                 "recovery_minutes": self.config["recovery_minutes"],
                 "automation_entity": self.entities["enabled"].entity_id,
-                "run_id": f"ui:{self.coordinator.entry.entry_id}:{occurrence}",
+                "run_id": (
+                    f"ui:{self.coordinator.entry.entry_id}:{occurrence}"
+                    + (f":c{self._continuations}" if continuation else "")
+                ),
             }
             if self.config["mowing_target"] == "rotation":
                 selection = self._rotation_target()
@@ -195,6 +216,54 @@ class MowingAutomation:
             await manager.async_request(TASK_SCHEMA(request))
         finally:
             self._run_task = None
+
+    def _current_block(self) -> str | None:
+        """The active Schedule block, named by its end, or None outside one."""
+        state = self.hass.states.get(self.config["schedule_entity"] or "")
+        if state is None or state.state != "on":
+            return None
+        end = state.attributes.get("next_event")
+        return str(end) if end else "open"
+
+    @callback
+    def _maybe_continue(self) -> None:
+        """Start again after recharge while the same block is still open.
+
+        Only a finished run of this automation arms it; the guarded request
+        still checks battery, permission, rain and native schedules itself.
+        """
+        if (
+            not self._continuation_armed
+            or not self.config.get("continue_in_block")
+            or self._closed
+            or not self.enabled
+            or self._run_task is not None
+        ):
+            return
+        if (
+            self._current_block() != self._continuation_block
+            or self._continuations >= MAX_BLOCK_CONTINUATIONS
+        ):
+            self._continuation_armed = False
+            return
+        manager = getattr(self.coordinator, "managed_mowing", None)
+        snapshot = getattr(self.coordinator, "data", None)
+        battery = getattr(snapshot, "battery_level", None)
+        if (
+            manager is None
+            or getattr(manager, "summary", None) is not None
+            or not snapshot_is_docked(snapshot)
+            or not isinstance(battery, int | float)
+            or battery < self.config["minimum_battery"]
+        ):
+            return
+        # Disarm before scheduling: Home Assistant starts tasks eagerly, and
+        # _run owns _run_task, so nothing here may mark the run afterwards.
+        self._continuation_armed = False
+        self._continuations += 1
+        self.hass.async_create_task(
+            self._run({"continuation": True}), "mowing automation continuation"
+        )
 
     def _rotation_map_index(self) -> int | None:
         """The selected map only while the inventory verifies its revision."""
@@ -253,6 +322,16 @@ class MowingAutomation:
             key: event.data.get(key)
             for key in ("status", "reason", "detail", "observed_at")
         }
+        status = event.data.get("status")
+        if status == "finished":
+            block = self._current_block()
+            self._continuation_armed = bool(
+                self.config.get("continue_in_block")
+                and block is not None
+                and block == self._continuation_block
+            )
+        elif status not in _CONTINUATION_KEEPS:
+            self._continuation_armed = False
         self.coordinator.async_update_listeners()
         if self.config["notify_outcome"]:
             persistent_notification.async_create(
@@ -438,6 +517,11 @@ class MowingAutomation:
                 self.entities.get("max_area"), "entity_id", None
             ),
             "plan": self.plan(),
+            "continue_in_block": bool(self.config.get("continue_in_block")),
+            "continuation": {
+                "armed": self._continuation_armed,
+                "count": self._continuations,
+            },
         }
 
     async def async_close(self) -> None:

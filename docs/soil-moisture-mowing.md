@@ -136,6 +136,20 @@ start and the zones it would request if it began then. It uses the same
 selection as the start itself; permission, battery and native checks still
 apply at that moment.
 
+## Start again within the same block
+
+One start per Schedule block may not cover the whole lawn, for example when
+**Maximum area per start** limits a run to what one battery mows. Enable
+**Start again after recharging while the Schedule block is still open** on
+the wait and recovery step: when a run of this automation finishes while its
+block is open, it starts again once the mower is docked with at least the
+minimum battery, choosing the zones still due.
+
+Each new start goes through the same guarded checks as the first. It stops
+when no zone is due, when the block ends, after a skipped, failed, cancelled
+or expired start, and after at most eight starts in one block. A block end
+still does not stop mowing already underway.
+
 ## Optional interruption and recovery
 
 The default **No action** checks conditions before starting and does not

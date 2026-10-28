@@ -140,6 +140,7 @@
           "recovery_minutes": "Nejzazší obnovení od plánovaného startu (0 = vypnuto)",
           "interruption": "Při ztrátě povolení během sečení",
           "resume_when_allowed": "Automaticky obnovit úlohu pozastavenou touto automatizací",
+          "continue_in_block": "Po dobití znovu vyrazit, dokud je blok rozvrhu otevřený",
           "notify_outcome": "Zobrazovat oznámení výsledků"
         }
       },

@@ -139,7 +139,7 @@ class MowingAutomationOptionsFlow(OptionsFlow):
                 )
             )
         )
-        for key in ("resume_when_allowed", "notify_outcome"):
+        for key in ("resume_when_allowed", "continue_in_block", "notify_outcome"):
             schema[vol.Required(key, default=data[key])] = bool
         return self.async_show_form(
             step_id="mowing_behavior",

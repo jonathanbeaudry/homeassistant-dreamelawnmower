@@ -139,6 +139,7 @@
           "recovery_minutes": "Latest recovery, from original scheduled start (0 = disabled)",
           "interruption": "If garden permission is lost while mowing",
           "resume_when_allowed": "Automatically resume this automation’s paused task",
+          "continue_in_block": "Start again after recharging while the Schedule block is still open",
           "notify_outcome": "Show outcome notifications"
         }
       },

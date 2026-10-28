@@ -139,6 +139,7 @@
           "recovery_minutes": "Ultima ripresa dall’avvio previsto (0 = disabilitata)",
           "interruption": "Se il permesso viene perso durante il taglio",
           "resume_when_allowed": "Riprendi automaticamente l’attività sospesa da questa automazione",
+          "continue_in_block": "Ripartire dopo la ricarica finché il blocco del programma è aperto",
           "notify_outcome": "Mostra notifiche del risultato"
         }
       },

@@ -139,6 +139,7 @@
           "recovery_minutes": "Última reanudación desde el inicio previsto (0 = desactivada)",
           "interruption": "Si se pierde el permiso durante el corte",
           "resume_when_allowed": "Reanudar automáticamente la tarea pausada por esta automatización",
+          "continue_in_block": "Volver a iniciar tras la recarga mientras el bloque del horario siga abierto",
           "notify_outcome": "Mostrar notificaciones de resultado"
         }
       },

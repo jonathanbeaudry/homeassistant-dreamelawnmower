@@ -98,6 +98,7 @@ AUTOMATION_SCHEMA = vol.Schema(
             vol.Coerce(float), vol.Range(min=0, max=100000)
         ),
         vol.Optional("rotation_zone_rest_days", default={}): zone_rest_days_by_map,
+        vol.Optional("continue_in_block", default=False): cv.boolean,
         vol.Optional("notify_outcome", default=True): cv.boolean,
         vol.Optional("native_plans_disabled", default=False): cv.boolean,
     }

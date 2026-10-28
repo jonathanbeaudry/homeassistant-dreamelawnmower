@@ -89,6 +89,7 @@
           "recovery_minutes": "Späteste Fortsetzung ab geplantem Start (0 = deaktiviert)",
           "interruption": "Bei Verlust der Freigabe während des Mähens",
           "resume_when_allowed": "Von dieser Automatik pausierte Aufgabe automatisch fortsetzen",
+          "continue_in_block": "Nach dem Laden erneut starten, solange der Zeitplanblock offen ist",
           "notify_outcome": "Ergebnisbenachrichtigungen anzeigen"
         }
       },
