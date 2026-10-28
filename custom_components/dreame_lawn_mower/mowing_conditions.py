@@ -42,6 +42,30 @@ def do_not_disturb_block(
     return f"Mower Do Not Disturb until {end // 60:02d}:{end % 60:02d}"
 
 
+def next_do_not_disturb_start(
+    settings: Mapping[str, Any] | None, at: datetime
+) -> datetime | None:
+    """The next start of an enabled Do Not Disturb window at or after ``at``.
+
+    None when the window is disabled or unknown; while the window is already
+    active, ``at`` itself (no time is left).
+    """
+    if do_not_disturb_block(settings, at) is not None:
+        return at
+    if settings is None or not settings.get("dnd_enabled"):
+        return None
+    start = settings.get("dnd_start_minutes")
+    if type(start) is not int or settings.get("dnd_end_minutes") == start:
+        return None
+    local = dt_util.as_local(at)
+    candidate = local.replace(
+        hour=start // 60, minute=start % 60, second=0, microsecond=0
+    )
+    if candidate <= local:
+        candidate += timedelta(days=1)
+    return candidate
+
+
 class MowingConditions:
     """Own hysteresis and continuous drying/settling waits for one runtime.
 

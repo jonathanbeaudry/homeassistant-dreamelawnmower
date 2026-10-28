@@ -49,6 +49,7 @@ def due_zone_ids(
     max_area: float,
     today: date,
     zone_rest_days_by_id: Mapping[int, int] | None = None,
+    area_budget: float | None = None,
 ) -> list[int]:
     """Return due zones, most overdue first, bounded by the area of one start.
 
@@ -61,6 +62,10 @@ def due_zone_ids(
     Zones are never split. The first due zone is always kept so a zone larger
     than ``max_area`` is not starved; any other zone needs a known area that
     still fits. ``max_area`` 0 = no limit.
+
+    ``area_budget`` is the area the mower can mow before its window ends. Unlike
+    ``max_area`` it has no first-zone exception: every zone needs a known area
+    that fits, so a run never starts what it cannot finish in time.
     """
     due: list[tuple[bool, date, int, int, Mapping[str, Any]]] = []
     for position, zone in enumerate(overview):
@@ -91,6 +96,8 @@ def due_zone_ids(
             else None
         )
         if max_area > 0 and selected and (known is None or total + known > max_area):
+            continue
+        if area_budget is not None and (known is None or total + known > area_budget):
             continue
         selected.append(zone_id)
         if max_area > 0 and known is None:

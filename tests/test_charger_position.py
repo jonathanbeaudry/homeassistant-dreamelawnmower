@@ -223,3 +223,24 @@ def test_camera_exposes_the_station_in_mower_position_units() -> None:
 
     unknown = attributes(vector_map_to_details(vector_map))
     assert (unknown["charger_x"], unknown["charger_y"]) == (None, None)
+
+
+def test_mowing_rate_needs_enough_real_sessions() -> None:
+    from custom_components.dreame_lawn_mower.dreame_lawn_mower_client.zone_mowing_history import (  # noqa: E501
+        SessionMowing,
+        session_mowing,
+    )
+
+    assert session_mowing({"areas": 64.01, "time": 84}) == SessionMowing(64.01, 84)
+    bad_summaries = (
+        {"areas": 0, "time": 1},
+        {"areas": 10, "time": 0},
+        {"areas": True, "time": 5},
+        {},
+    )
+    for bad in bad_summaries:
+        assert session_mowing(bad) is None
+    two = {"a": SessionMowing(70, 60), "b": SessionMowing(70, 60)}
+    assert ZoneMowingHistory(mowing=two).mowing_rate() is None
+    three = {**two, "c": SessionMowing(140, 60), "short": SessionMowing(500, 2)}
+    assert ZoneMowingHistory(mowing=three).mowing_rate() == 93.33333333333333

@@ -141,6 +141,7 @@
           "interruption": "En cas de perte d’autorisation pendant la tonte",
           "resume_when_allowed": "Reprendre automatiquement la tâche suspendue par cette automatisation",
           "continue_in_block": "Repartir après la recharge tant que le bloc de l’horaire est ouvert",
+          "finish_before_window_end": "Ne lancer que les zones qu’elle peut finir avant la fin de la fenêtre (fin du bloc ou Ne pas déranger), selon la vitesse mesurée",
           "notify_outcome": "Afficher les notifications de résultat"
         }
       },

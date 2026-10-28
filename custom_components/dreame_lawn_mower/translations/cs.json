@@ -142,6 +142,7 @@
           "interruption": "Při ztrátě povolení během sečení",
           "resume_when_allowed": "Automaticky obnovit úlohu pozastavenou touto automatizací",
           "continue_in_block": "Po dobití znovu vyrazit, dokud je blok rozvrhu otevřený",
+          "finish_before_window_end": "Spouštět jen zóny, které stihne dokončit před koncem okna (konec bloku nebo Nerušit), podle naměřené rychlosti",
           "notify_outcome": "Zobrazovat oznámení výsledků"
         }
       },

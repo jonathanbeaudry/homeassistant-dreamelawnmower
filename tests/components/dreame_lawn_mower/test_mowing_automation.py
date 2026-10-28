@@ -1215,3 +1215,79 @@ async def test_the_mowers_own_unfinished_task_arms_the_next_start(hass, monkeypa
     await hass.async_block_till_done()
     assert manager.async_request.await_count == 2
     assert manager.async_request.call_args.args[0]["run_id"].endswith(":c1")
+
+
+def test_next_do_not_disturb_start():
+    from custom_components.dreame_lawn_mower.mowing_conditions import (
+        next_do_not_disturb_start,
+    )
+
+    assert next_do_not_disturb_start(DND, _local(12)) == _local(21)
+    assert next_do_not_disturb_start(DND, _local(22)) == _local(22)
+    assert next_do_not_disturb_start({**DND, "dnd_enabled": False}, _local(12)) is None
+    assert next_do_not_disturb_start(None, _local(12)) == _local(12)
+
+
+def _budget_runtime(hass, monkeypatch, at_hour, *, rate=True, **settings):
+    from custom_components.dreame_lawn_mower.dreame_lawn_mower_client.zone_mowing_history import (  # noqa: E501
+        SessionMowing,
+        ZoneMowingHistory,
+    )
+
+    overview = [
+        {"zone_id": 5, "label": "Back", "last_completed_at": None, "area_m2": 196},
+        {"zone_id": 4, "label": "Side", "last_completed_at": None, "area_m2": 70},
+    ]
+    runtime, manager = _rotation_runtime(
+        hass,
+        monkeypatch,
+        overview=overview,
+        mowing_target="rotation",
+        rotation_max_area=300,
+        outside_dnd=True,
+        **settings,
+    )
+    sessions = {str(n): SessionMowing(71, 60) for n in range(3)} if rate else {}
+    history = ZoneMowingHistory(mowing=sessions)
+    runtime.coordinator.zone_mowing_sessions = SimpleNamespace(
+        complete=True, attributable=True, mowing_rate=history.mowing_rate
+    )
+    runtime.coordinator.device_settings = DND
+    hass.states.async_set("schedule.garden", "on", {"next_event": None})
+    monkeypatch.setattr(
+        "custom_components.dreame_lawn_mower.mowing_automation.dt_util.utcnow",
+        lambda: dt_util.as_utc(_local(*at_hour)),
+    )
+    return runtime, manager
+
+
+@pytest.mark.parametrize(
+    ("hour", "minute", "zones", "reason"),
+    [
+        (16, 0, [5, 4], None),  # Do Not Disturb at 21:00: 5 h × 71 m²/h = 355 m²
+        (19, 0, [4], None),  # 142 m²: zone 5 (196 m²) cannot finish
+        (20, 0, [4], None),  # 71 m²
+        (20, 30, None, "no_time_left"),  # 35.5 m²: nothing fits
+    ],
+)
+async def test_starts_only_what_fits_before_the_window_ends(
+    hass, monkeypatch, hour, minute, zones, reason
+):
+    runtime, manager = _budget_runtime(
+        hass, monkeypatch, (hour, minute), finish_before_window_end=True
+    )
+    target = runtime._rotation_target()
+    if reason:
+        assert target == reason
+    else:
+        assert target["zone_ids"] == zones
+    assert runtime.summary["time_budget"]["mowing_rate_m2_h"] == 71.0
+
+
+async def test_the_time_budget_fails_closed_and_stays_optional(hass, monkeypatch):
+    runtime, _ = _budget_runtime(
+        hass, monkeypatch, (16, 0), rate=False, finish_before_window_end=True
+    )
+    assert runtime._rotation_target() == "mowing_rate_unknown"
+    runtime, _ = _budget_runtime(hass, monkeypatch, (20, 30))
+    assert runtime._rotation_target()["zone_ids"] == [5, 4]

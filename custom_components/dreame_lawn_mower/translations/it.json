@@ -141,6 +141,7 @@
           "interruption": "Se il permesso viene perso durante il taglio",
           "resume_when_allowed": "Riprendi automaticamente l’attività sospesa da questa automazione",
           "continue_in_block": "Ripartire dopo la ricarica finché il blocco del programma è aperto",
+          "finish_before_window_end": "Avviare solo le zone completabili prima della fine della finestra (fine blocco o Non disturbare), secondo la velocità misurata",
           "notify_outcome": "Mostra notifiche del risultato"
         }
       },

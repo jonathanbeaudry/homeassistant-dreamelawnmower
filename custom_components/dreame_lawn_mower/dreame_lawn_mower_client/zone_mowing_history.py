@@ -138,6 +138,36 @@ def zone_geometry(summary: Any) -> ZoneGeometry | None:
 
 
 @dataclass(frozen=True)
+class SessionMowing:
+    """Area one session mowed and its mowing minutes (charging excluded)."""
+
+    area_m2: float
+    minutes: int
+
+
+def session_mowing(summary: Any) -> SessionMowing | None:
+    """Decode ``areas`` (m²) and ``time`` (mowing minutes) from one summary."""
+    if not isinstance(summary, Mapping):
+        return None
+    area, minutes = summary.get("areas"), summary.get("time")
+    if (
+        not isinstance(area, int | float)
+        or isinstance(area, bool)
+        or type(minutes) is not int
+        or not 0 < area <= 100_000
+        or not 0 < minutes <= 1440
+    ):
+        return None
+    return SessionMowing(float(area), minutes)
+
+
+# Sessions shorter than this say little about the mowing rate.
+MIN_RATE_SESSION_MINUTES = 5
+# A rate needs at least this many sessions.
+MIN_RATE_SESSIONS = 3
+
+
+@dataclass(frozen=True)
 class ZoneMowingHistory:
     """Successful summaries plus the unfinished hydration queue."""
 
@@ -146,6 +176,19 @@ class ZoneMowingHistory:
     history_available: bool = True
     chargers: Mapping[str, ChargerPosition] = field(default_factory=dict)
     geometries: Mapping[str, ZoneGeometry] = field(default_factory=dict)
+    mowing: Mapping[str, SessionMowing] = field(default_factory=dict)
+
+    def mowing_rate(self) -> float | None:
+        """Square metres per mowing hour over the recent sessions, if known."""
+        usable = [
+            item for item in self.mowing.values()
+            if item.minutes >= MIN_RATE_SESSION_MINUTES
+        ]
+        if len(usable) < MIN_RATE_SESSIONS:
+            return None
+        return sum(item.area_m2 for item in usable) / sum(
+            item.minutes for item in usable
+        ) * 60
 
     def latest_charger(self, map_hash: str | None = None) -> ChargerPosition | None:
         """Newest station on the requested revision, without a foreign fallback."""
@@ -358,6 +401,7 @@ async def async_get_zone_mowing_records(
         geometries = {
             name: known.geometries[name] for name in names if name in known.geometries
         }
+        mowing = {name: known.mowing[name] for name in names if name in known.mowing}
         resolved = {name for name in result if name not in known.pending}
         missing = [name for name in names if name not in resolved]
         # Untried new summaries first; retain a rotated queue across partial passes.
@@ -385,6 +429,9 @@ async def async_get_zone_mowing_records(
                 geometry = zone_geometry(summary)
                 if geometry is not None:
                     geometries[name] = geometry
+                stats = session_mowing(summary)
+                if stats is not None:
+                    mowing[name] = stats
                 decoded = zone_mowing_records(summary, name)
                 result[name] = decoded.records
                 if decoded.understood:
@@ -395,7 +442,11 @@ async def async_get_zone_mowing_records(
             name for name in unfinished if name in attempted
         ]
         return ZoneMowingHistory(
-            result, tuple(unfinished), chargers=chargers, geometries=geometries
+            result,
+            tuple(unfinished),
+            chargers=chargers,
+            geometries=geometries,
+            mowing=mowing,
         )
 
     return await client._async_cloud_read(read)

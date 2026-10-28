@@ -141,6 +141,7 @@
           "interruption": "Si se pierde el permiso durante el corte",
           "resume_when_allowed": "Reanudar automáticamente la tarea pausada por esta automatización",
           "continue_in_block": "Volver a iniciar tras la recarga mientras el bloque del horario siga abierto",
+          "finish_before_window_end": "Iniciar solo las zonas que pueda terminar antes del fin de la ventana (fin del bloque o No molestar), según el ritmo medido",
           "notify_outcome": "Mostrar notificaciones de resultado"
         }
       },

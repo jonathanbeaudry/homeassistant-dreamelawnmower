@@ -31,7 +31,7 @@ from .mowing_automation_config import (
     automation_config,
     zone_rest_days_by_id,
 )
-from .mowing_conditions import MowingConditions
+from .mowing_conditions import MowingConditions, next_do_not_disturb_start
 from .option_updates import EntryUpdateSnapshot
 from .sensor_zone_history import current_zone_overview, selected_map_revision
 from .zone_rotation import due_zone_ids, rotation_zones
@@ -92,6 +92,8 @@ class MowingAutomation:
         # Deadline of a start waiting for zone history after an integration
         # reload, and whether that start was a continuation.
         self._history_wait: tuple[datetime, bool] | None = None
+        # Last time budget computed for a start or the plan, for dashboards.
+        self._budget: dict[str, Any] = {}
 
     @callback
     def bind(self, kind: str, entity: Any) -> None:
@@ -346,7 +348,49 @@ class MowingAutomation:
             return "zone_history_unavailable"
         return overview, map_index
 
-    def _rotation_target(self, today: date | None = None) -> dict[str, Any] | str:
+    def _window_end(self, at: datetime) -> datetime | None:
+        """When mowing must be over: the block end or the next Do Not Disturb start.
+
+        The block end is known only while the block is on (its next_event).
+        """
+        ends: list[datetime] = []
+        state = self.hass.states.get(self.config["schedule_entity"] or "")
+        if state is not None and state.state == "on":
+            end = dt_util.parse_datetime(str(state.attributes.get("next_event") or ""))
+            if end is not None:
+                ends.append(end)
+        if self.config.get("outside_dnd"):
+            dnd = next_do_not_disturb_start(
+                device_settings_section(
+                    getattr(self.coordinator, "device_settings", None)
+                ),
+                at,
+            )
+            if dnd is not None:
+                ends.append(dnd)
+        return min(ends) if ends else None
+
+    def _area_budget(self, at: datetime) -> float | str | None:
+        """Area mowable before the window ends at the measured rate, or why not."""
+        self._budget = {"window_end": None, "mowing_rate_m2_h": None, "area_m2": None}
+        if not self.config.get("finish_before_window_end"):
+            return None
+        history = getattr(self.coordinator, "zone_mowing_sessions", None)
+        rate: float | None = history.mowing_rate() if history is not None else None
+        if rate is None:
+            return "mowing_rate_unknown"
+        end = self._window_end(at)
+        self._budget["mowing_rate_m2_h"] = round(rate, 1)
+        if end is None:
+            return None
+        budget = max(0.0, (end - at).total_seconds() / 3600 * rate)
+        self._budget["window_end"] = end.isoformat()
+        self._budget["area_m2"] = round(budget, 1)
+        return budget
+
+    def _rotation_target(
+        self, today: date | None = None, at: datetime | None = None
+    ) -> dict[str, Any] | str:
         """Due whole zones of the selected map, or why none can be chosen.
 
         The scheduled start and the dashboard preview both call this, so the
@@ -356,14 +400,20 @@ class MowingAutomation:
         if isinstance(usable, str):
             return usable
         overview, map_index = usable
-        zone_ids = due_zone_ids(
-            overview,
-            rest_days=self.config["rotation_rest_days"],
-            max_area=self.config["rotation_max_area"],
-            today=today or dt_util.now().date(),
-            zone_rest_days_by_id=zone_rest_days_by_id(self.config, map_index),
-        )
+        budget = self._area_budget(at or dt_util.utcnow())
+        if isinstance(budget, str):
+            return budget
+        selection = {
+            "rest_days": self.config["rotation_rest_days"],
+            "max_area": self.config["rotation_max_area"],
+            "today": today or dt_util.now().date(),
+            "zone_rest_days_by_id": zone_rest_days_by_id(self.config, map_index),
+        }
+        zone_ids = due_zone_ids(overview, area_budget=budget, **selection)
         if not zone_ids:
+            # Due zones that do not fit the time left are not "nothing due".
+            if budget is not None and due_zone_ids(overview, **selection):
+                return "no_time_left"
             return "no_zone_due"
         return {"task_type": "zone", "zone_ids": zone_ids, "map_index": map_index}
 
@@ -521,7 +571,7 @@ class MowingAutomation:
         if self.config["mowing_target"] != "rotation":
             return result
         day = dt_util.as_local(next_start).date() if next_start else None
-        target = self._rotation_target(day)
+        target = self._rotation_target(day, next_start)
         result["task_type"] = "zone"
         if isinstance(target, str):
             result["reason"] = target
@@ -582,6 +632,10 @@ class MowingAutomation:
                 "armed": self._continuation_armed,
                 "count": self._continuations,
             },
+            "finish_before_window_end": bool(
+                self.config.get("finish_before_window_end")
+            ),
+            "time_budget": dict(self._budget),
             "waiting_for_history_until": (
                 self._history_wait[0].isoformat() if self._history_wait else None
             ),

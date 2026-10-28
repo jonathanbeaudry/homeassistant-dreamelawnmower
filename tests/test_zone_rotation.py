@@ -97,3 +97,20 @@ def test_one_rest_value_for_every_zone_keeps_the_overview_order():
     assert due_zone_ids(
         overview, rest_days=1, max_area=0, today=TODAY, zone_rest_days_by_id={}
     ) == [4, 2, 5, 1]
+
+
+def test_an_area_budget_has_no_first_zone_exception():
+    overview = [
+        zone(1, area=200),
+        zone(2, area=80),
+        zone(3, area=None),
+        zone(4, area=30),
+    ]
+    assert due_zone_ids(
+        overview, rest_days=1, max_area=300, today=TODAY, area_budget=120
+    ) == [2, 4]
+    assert due_zone_ids(
+        overview, rest_days=1, max_area=0, today=TODAY, area_budget=20
+    ) == []
+    # Without a budget the oversized first zone is still kept, as before.
+    assert due_zone_ids(overview, rest_days=1, max_area=100, today=TODAY)[0] == 1

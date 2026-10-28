@@ -170,6 +170,22 @@ when no zone is due, when the block ends, after a skipped, failed, cancelled
 or expired start, and after at most eight starts in one block. A block end
 still does not stop mowing already underway.
 
+## Finish before the window ends
+
+A block end does not stop mowing already underway, and neither does the start
+of the mower's Do Not Disturb window. With **Start only zones that can be
+finished before the window ends**, each start in zone rotation only takes the
+due zones the mower can mow before the earlier of the Schedule block end and,
+with the Do Not Disturb condition, the next Do Not Disturb start.
+
+The rate is measured from recent session summaries (mowed area over mowing
+minutes, charging excluded; at least three sessions of five minutes or more).
+Unlike the maximum area per start, the time budget has no first-zone
+exception and a zone of unknown area is never added. When no due zone fits,
+the start is skipped with `no_time_left`; while no rate is known yet, with
+`mowing_rate_unknown`. The `mowing_automation` summary reports the
+`time_budget` (window end, rate, area).
+
 ## Optional interruption and recovery
 
 The default **No action** checks conditions before starting and does not

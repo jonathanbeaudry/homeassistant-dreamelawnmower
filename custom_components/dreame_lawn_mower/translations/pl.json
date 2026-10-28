@@ -141,6 +141,7 @@
           "interruption": "Po utracie zezwolenia podczas koszenia",
           "resume_when_allowed": "Automatycznie wznów zadanie wstrzymane przez tę automatyzację",
           "continue_in_block": "Ponownie wyruszyć po naładowaniu, dopóki blok harmonogramu jest otwarty",
+          "finish_before_window_end": "Uruchamiać tylko strefy, które zdąży skończyć przed końcem okna (koniec bloku lub Nie przeszkadzać), wg zmierzonego tempa",
           "notify_outcome": "Pokazuj powiadomienia o wyniku"
         }
       },

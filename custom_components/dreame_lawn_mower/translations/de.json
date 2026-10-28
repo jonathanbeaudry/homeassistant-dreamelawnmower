@@ -91,6 +91,7 @@
           "interruption": "Bei Verlust der Freigabe während des Mähens",
           "resume_when_allowed": "Von dieser Automatik pausierte Aufgabe automatisch fortsetzen",
           "continue_in_block": "Nach dem Laden erneut starten, solange der Zeitplanblock offen ist",
+          "finish_before_window_end": "Nur Zonen starten, die vor dem Fensterende (Blockende oder Nicht stören) fertig werden, nach gemessener Mähgeschwindigkeit",
           "notify_outcome": "Ergebnisbenachrichtigungen anzeigen"
         }
       },
