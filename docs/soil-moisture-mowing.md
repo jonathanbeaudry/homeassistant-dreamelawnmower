@@ -72,6 +72,18 @@ Irrigation that is `unknown` or `unavailable` blocks mowing. An additional
 permission entity must explicitly be `on` and have reported within 30 minutes;
 use a helper that also checks its own source freshness when combining rules.
 
+## Respect the mower's Do Not Disturb window
+
+On the garden conditions step, **Mow only outside the mower's Do Not Disturb
+window** adds the window set in the vendor app to the permission. While it is
+active, **Mowing permitted** is off with the reason "Mower Do Not Disturb until
+08:00"; a window crossing midnight is handled, and a disabled window blocks
+nothing. If the mower has not reported its window, starts are blocked.
+
+Combined with a Schedule block covering the day, a wait window and **Start
+again after recharging**, this mows whenever the mower is allowed to, without
+copying the window into the Schedule.
+
 ## Skip or wait for the ground to dry
 
 - **Wait window 0:** a wet 10:00 start is skipped. The next attempt is at the

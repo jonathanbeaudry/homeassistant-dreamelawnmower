@@ -961,3 +961,67 @@ async def test_zone_frequency_rejects_an_overtaken_map_request(hass, monkeypatch
     with pytest.raises(HomeAssistantError):
         await runtime.async_set_zone_rest_days(77, 0)
     assert entry.options == before
+
+
+def _local(hour, minute=0):
+    from datetime import datetime
+
+    return datetime(2026, 10, 28, hour, minute, tzinfo=dt_util.get_default_time_zone())
+
+
+DND = {
+    "available": True,
+    "dnd_settings_available": True,
+    "dnd_enabled": True,
+    "dnd_start_minutes": 21 * 60,
+    "dnd_end_minutes": 8 * 60,
+}
+NOON_DND = {**DND, "dnd_start_minutes": 12 * 60, "dnd_end_minutes": 14 * 60}
+UNKNOWN_DND = "The mower's Do Not Disturb window is unknown"
+
+
+@pytest.mark.parametrize(
+    ("settings", "hour", "blocked"),
+    [
+        (DND, 23, "Mower Do Not Disturb until 08:00"),
+        (DND, 7, "Mower Do Not Disturb until 08:00"),
+        (DND, 8, None),
+        (DND, 12, None),
+        (NOON_DND, 13, "Mower Do Not Disturb until 14:00"),
+        (NOON_DND, 15, None),
+        ({**DND, "dnd_enabled": False}, 23, None),
+        ({**DND, "dnd_end_minutes": 21 * 60}, 23, None),
+        (None, 12, UNKNOWN_DND),
+        ({**DND, "dnd_settings_available": False}, 12, UNKNOWN_DND),
+        ({**DND, "dnd_end_minutes": 1440}, 12, UNKNOWN_DND),
+    ],
+)
+def test_do_not_disturb_window_blocks_and_fails_closed(settings, hour, blocked):
+    from custom_components.dreame_lawn_mower.mowing_conditions import (
+        do_not_disturb_block,
+    )
+
+    assert do_not_disturb_block(settings, _local(hour)) == blocked
+
+
+async def test_outside_dnd_is_a_garden_condition_only_when_enabled(hass):
+    off = MowingConditions(config())
+    assert off.evaluate(hass, _local(23), DND)[0] is True
+    on = MowingConditions(config(outside_dnd=True))
+    permitted, reason = on.evaluate(hass, _local(23), DND)
+    assert permitted is False
+    assert reason == "Mower Do Not Disturb until 08:00"
+    assert on.evaluate(hass, _local(12), DND)[0] is True
+    assert on.evaluate(hass, _local(12), None)[0] is False
+
+
+async def test_runtime_reads_the_mower_do_not_disturb_window(hass, monkeypatch):
+    runtime, _ = _rotation_runtime(hass, monkeypatch, overview=[], outside_dnd=True)
+    runtime.coordinator.device_settings = DND
+    monkeypatch.setattr(
+        "custom_components.dreame_lawn_mower.mowing_automation.dt_util.utcnow",
+        lambda: dt_util.as_utc(_local(23)),
+    )
+    runtime._evaluate()
+    assert runtime.permitted is False
+    assert runtime.reason == "Mower Do Not Disturb until 08:00"

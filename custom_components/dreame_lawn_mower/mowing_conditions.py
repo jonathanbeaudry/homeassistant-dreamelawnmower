@@ -3,12 +3,43 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.util import dt as dt_util
 
 from .mowing_permission import permission_block
+
+
+def do_not_disturb_block(
+    settings: Mapping[str, Any] | None, now: datetime
+) -> str | None:
+    """Why the mower's own Do Not Disturb window blocks a start now, if it does.
+
+    Fails closed when the mower has not reported its window. A disabled window
+    blocks nothing; a window crossing midnight is handled.
+    """
+    if settings is None or not settings.get("dnd_settings_available"):
+        return "The mower's Do Not Disturb window is unknown"
+    if not settings.get("dnd_enabled"):
+        return None
+    start, end = settings.get("dnd_start_minutes"), settings.get("dnd_end_minutes")
+    if (
+        type(start) is not int
+        or type(end) is not int
+        or not 0 <= start < 1440
+        or not 0 <= end < 1440
+    ):
+        return "The mower's Do Not Disturb window is unknown"
+    if start == end:
+        return None
+    local = dt_util.as_local(now)
+    minute = local.hour * 60 + local.minute
+    active = start <= minute < end if start < end else minute >= start or minute < end
+    if not active:
+        return None
+    return f"Mower Do Not Disturb until {end // 60:02d}:{end % 60:02d}"
 
 
 class MowingConditions:
@@ -24,10 +55,19 @@ class MowingConditions:
         self._dry_since: datetime | None = None
         self._irrigation_until: datetime | None = None
 
-    def evaluate(self, hass: Any, now: datetime) -> tuple[bool, str]:
+    def evaluate(
+        self,
+        hass: Any,
+        now: datetime,
+        device_settings: Mapping[str, Any] | None = None,
+    ) -> tuple[bool, str]:
         """Return a permission and readable explanation, using fresh HA state."""
         config = self.config
         blocks: list[str] = []
+        if config.get("outside_dnd"):
+            dnd = do_not_disturb_block(device_settings, now)
+            if dnd:
+                blocks.append(dnd)
         soil = config["soil_entity"]
         if soil:
             state = hass.states.get(soil)

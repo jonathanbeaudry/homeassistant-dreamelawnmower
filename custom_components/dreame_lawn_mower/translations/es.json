@@ -123,6 +123,7 @@
           "soil_entity": "Sensor de humedad del suelo (0–100 %, opcional)",
           "irrigation_entity": "Entidad de riego activo (opcional)",
           "permission_entity": "Permiso adicional para cortar (opcional)",
+          "outside_dnd": "Cortar solo fuera del periodo No molestar del robot",
           "wet_threshold": "Bloquear por encima de esta humedad",
           "dry_threshold": "Iniciar el secado por debajo de esta humedad",
           "drying_minutes": "Tiempo continuo de secado",

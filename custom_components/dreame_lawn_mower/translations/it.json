@@ -123,6 +123,7 @@
           "soil_entity": "Sensore di umidità del terreno (0–100%, facoltativo)",
           "irrigation_entity": "Entità di irrigazione attiva (facoltativa)",
           "permission_entity": "Permesso aggiuntivo di taglio (facoltativo)",
+          "outside_dnd": "Tagliare solo fuori dalla fascia Non disturbare del robot",
           "wet_threshold": "Blocca sopra questa umidità",
           "dry_threshold": "Avvia l’asciugatura sotto questa umidità",
           "drying_minutes": "Tempo continuo di asciugatura",

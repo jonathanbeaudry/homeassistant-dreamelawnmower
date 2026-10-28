@@ -79,6 +79,7 @@ AUTOMATION_SCHEMA = vol.Schema(
             vol.Coerce(int), vol.Range(min=0, max=1440)
         ),
         vol.Optional("permission_entity", default=""): vol.Any("", cv.entity_id),
+        vol.Optional("outside_dnd", default=False): cv.boolean,
         vol.Optional("minimum_battery", default=30): vol.All(
             vol.Coerce(int), vol.Range(min=20, max=100)
         ),
