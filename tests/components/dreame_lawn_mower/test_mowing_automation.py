@@ -1194,12 +1194,17 @@ async def test_without_a_wait_window_missing_history_still_skips_at_once(
     assert manager.skip.call_args.args[1] == "zone_history_unavailable"
 
 
-async def test_the_mowers_own_unfinished_task_arms_the_next_start(hass, monkeypatch):
+@pytest.mark.parametrize(
+    "reason", ["resumable_or_unknown_task", "not_docked", "active_or_unknown_task"]
+)
+async def test_the_mowers_own_unfinished_task_arms_the_next_start(
+    hass, monkeypatch, reason
+):
     runtime, manager = _continuation_runtime(
         hass, monkeypatch, continue_in_block=True, battery=50
     )
     await runtime._run({"trigger": {"platform": "schedule"}})
-    _finished(runtime, status="skipped", reason="resumable_or_unknown_task")
+    _finished(runtime, status="skipped", reason=reason)
     # Charging below the minimum, then away finishing its own task: nothing.
     runtime._evaluate()
     runtime.coordinator.data.docked = False

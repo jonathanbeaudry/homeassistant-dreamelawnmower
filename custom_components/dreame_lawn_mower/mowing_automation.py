@@ -39,8 +39,11 @@ from .zone_rotation import due_zone_ids, rotation_zones
 _LOGGER = logging.getLogger(__name__)
 # Starts after recharge within one Schedule block, at most this many times.
 MAX_BLOCK_CONTINUATIONS = 8
-# A skipped start that leaves the mower finishing its own unfinished task.
-_NATIVE_TASK_PENDING = "resumable_or_unknown_task"
+# Skips meaning the mower is busy with its own task (away from the dock,
+# mowing, or holding an unfinished task it resumes after charging).
+_MOWER_BUSY_REASONS = frozenset(
+    {"not_docked", "active_or_unknown_task", "resumable_or_unknown_task"}
+)
 # A continuation ends on any outcome other than these.
 _CONTINUATION_KEEPS = frozenset({"submitted", "started", "deferred", "paused"})
 
@@ -428,11 +431,12 @@ class MowingAutomation:
         }
         status = event.data.get("status")
         native_pending = (
-            status == "skipped" and event.data.get("reason") == _NATIVE_TASK_PENDING
+            status == "skipped" and event.data.get("reason") in _MOWER_BUSY_REASONS
         )
         if status == "finished" or native_pending:
-            # A finished run, or the mower still finishing its own unfinished
-            # task (native resume after charging), lets this block start again.
+            # A finished run, or a mower busy with its own task (it finishes
+            # it first, e.g. native resume after charging), lets this block
+            # start again once it is back on the dock with the minimum battery.
             block = self._current_block()
             self._continuation_armed = bool(
                 self.config.get("continue_in_block")
