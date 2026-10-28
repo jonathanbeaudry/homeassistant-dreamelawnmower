@@ -123,6 +123,7 @@
           "soil_entity": "Soil moisture sensor (0–100%, optional)",
           "irrigation_entity": "Irrigation running entity (optional)",
           "permission_entity": "Additional mowing permission (optional)",
+          "outside_dnd": "Mow only outside the mower's Do Not Disturb window",
           "wet_threshold": "Block above this moisture",
           "dry_threshold": "Allow drying wait below this moisture",
           "drying_minutes": "Continuous drying wait",

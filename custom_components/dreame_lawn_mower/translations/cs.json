@@ -124,6 +124,7 @@
           "soil_entity": "Senzor vlhkosti půdy (0–100 %, volitelné)",
           "irrigation_entity": "Entita probíhající závlahy (volitelné)",
           "permission_entity": "Další povolení sečení (volitelné)",
+          "outside_dnd": "Sekat jen mimo období Nerušit sekačky",
           "wet_threshold": "Blokovat nad touto vlhkostí",
           "dry_threshold": "Zahájit vysychání pod touto vlhkostí",
           "drying_minutes": "Nepřetržitá doba vysychání",

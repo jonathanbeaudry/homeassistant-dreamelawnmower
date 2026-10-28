@@ -73,6 +73,7 @@
           "soil_entity": "Bodenfeuchtesensor (0–100%, optional)",
           "irrigation_entity": "Entität für laufende Bewässerung (optional)",
           "permission_entity": "Zusätzliche Mähfreigabe (optional)",
+          "outside_dnd": "Nur außerhalb des Nicht-stören-Zeitraums des Mähers mähen",
           "wet_threshold": "Oberhalb dieser Feuchte sperren",
           "dry_threshold": "Unterhalb dieser Feuchte Trocknungszeit starten",
           "drying_minutes": "Durchgehende Trocknungszeit",

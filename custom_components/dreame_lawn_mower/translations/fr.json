@@ -123,6 +123,7 @@
           "soil_entity": "Capteur d’humidité du sol (0–100 %, facultatif)",
           "irrigation_entity": "Entité d’arrosage en cours (facultative)",
           "permission_entity": "Autorisation supplémentaire de tonte (facultative)",
+          "outside_dnd": "Tondre seulement hors de la période Ne pas déranger de la tondeuse",
           "wet_threshold": "Bloquer au-dessus de cette humidité",
           "dry_threshold": "Commencer le séchage sous cette humidité",
           "drying_minutes": "Durée continue de séchage",

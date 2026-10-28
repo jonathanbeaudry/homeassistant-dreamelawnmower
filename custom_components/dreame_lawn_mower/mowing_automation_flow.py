@@ -94,6 +94,7 @@ class MowingAutomationOptionsFlow(OptionsFlow):
                     unit_of_measurement=unit,
                 )
             )
+        schema[vol.Required("outside_dnd", default=data["outside_dnd"])] = bool
         return self.async_show_form(
             step_id="mowing_conditions",
             data_schema=vol.Schema(schema),

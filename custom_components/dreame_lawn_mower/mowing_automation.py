@@ -22,6 +22,7 @@ from homeassistant.helpers.trigger import (
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
+from .device_settings_control import device_settings_section
 from .dreame_lawn_mower_client.position_tracking import snapshot_is_docked
 from .managed_mowing_state import TASK_SCHEMA
 from .mowing_automation_config import (
@@ -162,7 +163,9 @@ class MowingAutomation:
             return
         previous = (self.permitted, self.reason)
         self.permitted, self.reason = self.conditions.evaluate(
-            self.hass, dt_util.utcnow()
+            self.hass,
+            dt_util.utcnow(),
+            device_settings_section(getattr(self.coordinator, "device_settings", None)),
         )
         if self._trigger_error:
             self.permitted, self.reason = False, self._trigger_error

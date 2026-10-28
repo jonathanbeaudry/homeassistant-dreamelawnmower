@@ -123,6 +123,7 @@
           "soil_entity": "Czujnik wilgotności gleby (0–100%, opcjonalny)",
           "irrigation_entity": "Encja działającego nawadniania (opcjonalna)",
           "permission_entity": "Dodatkowe zezwolenie na koszenie (opcjonalne)",
+          "outside_dnd": "Kosić tylko poza okresem Nie przeszkadzać kosiarki",
           "wet_threshold": "Blokuj powyżej tej wilgotności",
           "dry_threshold": "Rozpocznij odliczanie poniżej tej wilgotności",
           "drying_minutes": "Ciągły czas schnięcia",
