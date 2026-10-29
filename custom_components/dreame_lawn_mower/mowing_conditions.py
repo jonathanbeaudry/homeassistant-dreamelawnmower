@@ -42,21 +42,43 @@ def do_not_disturb_block(
     return f"Mower Do Not Disturb until {end // 60:02d}:{end % 60:02d}"
 
 
+def do_not_disturb_end(
+    settings: Mapping[str, Any] | None, at: datetime
+) -> datetime | None:
+    """When an active, known Do Not Disturb window ends; None when inactive."""
+    if settings is None or do_not_disturb_block(settings, at) is None:
+        return None
+    end = settings.get("dnd_end_minutes")
+    if type(end) is not int or not settings.get("dnd_enabled"):
+        return None
+    local = dt_util.as_local(at)
+    candidate = local.replace(hour=end // 60, minute=end % 60, second=0, microsecond=0)
+    if candidate <= local:
+        candidate += timedelta(days=1)
+    return candidate
+
+
 def next_do_not_disturb_start(
     settings: Mapping[str, Any] | None, at: datetime
 ) -> datetime | None:
     """The next start of an enabled Do Not Disturb window at or after ``at``.
 
-    None when the window is disabled or unknown; while the window is already
-    active, ``at`` itself (no time is left).
+    None when the window is disabled; ``at`` itself when it is unknown (no
+    time can be counted on). While the window is active, mowing waits for its
+    end, so this is the start of the following window.
     """
-    if do_not_disturb_block(settings, at) is not None:
+    if settings is None or not settings.get("dnd_settings_available"):
         return at
-    if settings is None or not settings.get("dnd_enabled"):
+    if not settings.get("dnd_enabled"):
         return None
     start = settings.get("dnd_start_minutes")
     if type(start) is not int or settings.get("dnd_end_minutes") == start:
         return None
+    if do_not_disturb_block(settings, at) is not None:
+        ends = do_not_disturb_end(settings, at)
+        if ends is None:
+            return at
+        at = ends
     local = dt_util.as_local(at)
     candidate = local.replace(
         hour=start // 60, minute=start % 60, second=0, microsecond=0

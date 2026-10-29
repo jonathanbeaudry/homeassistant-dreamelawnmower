@@ -31,7 +31,11 @@ from .mowing_automation_config import (
     automation_config,
     zone_rest_days_by_id,
 )
-from .mowing_conditions import MowingConditions, next_do_not_disturb_start
+from .mowing_conditions import (
+    MowingConditions,
+    do_not_disturb_end,
+    next_do_not_disturb_start,
+)
 from .option_updates import EntryUpdateSnapshot
 from .sensor_zone_history import current_zone_overview, selected_map_revision
 from .zone_rotation import due_zone_ids, rotation_zones
@@ -386,7 +390,20 @@ class MowingAutomation:
         self._budget["mowing_rate_m2_h"] = round(rate, 1)
         if end is None:
             return None
-        budget = max(0.0, (end - at).total_seconds() / 3600 * rate)
+        # Inside the mower's Do Not Disturb window the start waits for its
+        # end: the time left counts from then, not from now.
+        begin = at
+        if self.config.get("outside_dnd"):
+            begin = (
+                do_not_disturb_end(
+                    device_settings_section(
+                        getattr(self.coordinator, "device_settings", None)
+                    ),
+                    at,
+                )
+                or at
+            )
+        budget = max(0.0, (end - begin).total_seconds() / 3600 * rate)
         self._budget["window_end"] = end.isoformat()
         self._budget["area_m2"] = round(budget, 1)
         return budget

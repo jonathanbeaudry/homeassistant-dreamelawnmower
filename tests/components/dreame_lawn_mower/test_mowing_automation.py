@@ -1228,7 +1228,10 @@ def test_next_do_not_disturb_start():
     )
 
     assert next_do_not_disturb_start(DND, _local(12)) == _local(21)
-    assert next_do_not_disturb_start(DND, _local(22)) == _local(22)
+    # Inside the window, mowing waits for its end (08:00): the next window
+    # then starts at 21:00 that day.
+    assert next_do_not_disturb_start(DND, _local(22)) == _local(21) + timedelta(days=1)
+    assert next_do_not_disturb_start(DND, _local(7, 25)) == _local(21)
     assert next_do_not_disturb_start({**DND, "dnd_enabled": False}, _local(12)) is None
     assert next_do_not_disturb_start(None, _local(12)) == _local(12)
 
@@ -1273,6 +1276,10 @@ def _budget_runtime(hass, monkeypatch, at_hour, *, rate=True, **settings):
         (19, 0, [4], None),  # 142 m²: zone 5 (196 m²) cannot finish
         (20, 0, [4], None),  # 71 m²
         (20, 30, None, "no_time_left"),  # 35.5 m²: nothing fits
+        # Measured 10-29 07:25: inside Do Not Disturb (until 08:00) the time
+        # left runs from 08:00 to 21:00, not from now.
+        (7, 25, [5, 4], None),
+        (22, 0, [5, 4], None),
     ],
 )
 async def test_starts_only_what_fits_before_the_window_ends(
@@ -1287,6 +1294,17 @@ async def test_starts_only_what_fits_before_the_window_ends(
     else:
         assert target["zone_ids"] == zones
     assert runtime.summary["time_budget"]["mowing_rate_m2_h"] == 71.0
+
+
+async def test_a_block_ending_during_do_not_disturb_has_no_time(hass, monkeypatch):
+    runtime, _ = _budget_runtime(
+        hass, monkeypatch, (7, 0), finish_before_window_end=True
+    )
+    # The block ends at 08:30, 30 min after Do Not Disturb: 35.5 m² fits nothing.
+    hass.states.async_set(
+        "schedule.garden", "on", {"next_event": _local(8, 30).isoformat()}
+    )
+    assert runtime._rotation_target() == "no_time_left"
 
 
 async def test_the_time_budget_fails_closed_and_stays_optional(hass, monkeypatch):
