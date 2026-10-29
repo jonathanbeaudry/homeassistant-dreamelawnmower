@@ -555,6 +555,21 @@ class DreameLawnMowerSnapshot:
     raw_info: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
     @property
+    def fault_state_clear(self) -> bool:
+        """Whether a device code was read and the snapshot reports no fault.
+
+        Covers a code with no fault meaning, a status notice, and a retained
+        fault the snapshot released after observing recovery. Nothing read yet
+        is unknown, never clear. A raw 0 is not "clear" by itself: on some
+        model families it is a hard fault.
+        """
+        return bool(
+            (self.raw_error_code is not None or self.realtime_error_code is not None)
+            and self.activity != "error"
+            and self.error_code in (None, -1)
+        )
+
+    @property
     def mower_state(self) -> str:
         """Return the normalized state key using mower terminology."""
         return _mower_terminology(self.state) or self.state

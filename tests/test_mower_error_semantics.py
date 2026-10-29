@@ -475,6 +475,69 @@ def test_operational_state_releases_stale_fault_code(
     assert recovered.realtime_error_code is None
 
 
+@pytest.mark.parametrize("state", ["CHARGING", "CHARGING_COMPLETED"])
+@pytest.mark.parametrize(
+    "model", ["dreame.mower.q2501a", "mova.mower.g2529b", "mova.mower.g2529c"]
+)
+def test_person_detection_retained_at_the_station_is_a_notice(
+    state: str, model: str
+) -> None:
+    # Measured on a LiDAX Ultra 1000: it avoided a person, finished its zone,
+    # returned, and kept reporting 27 at the station, fully charged.
+    snapshot = _snapshot(
+        27, "human_detected", realtime_error_code=27, state=state, model=model
+    )
+
+    assert snapshot.activity == "docked"
+    assert snapshot.error_code is None
+    assert snapshot.status_notice_code == 27
+    assert snapshot.fault_state_clear is True
+
+
+@pytest.mark.parametrize("state", ["PAUSED", "ERROR"])
+def test_person_detection_halting_the_mower_stays_a_fault(state: str) -> None:
+    snapshot = _snapshot(
+        27, "human_detected", realtime_error_code=27, state=state,
+        model="mova.mower.g2529c",
+    )
+
+    assert snapshot.activity == "error"
+    assert snapshot.error_code == 27
+    assert snapshot.fault_state_clear is False
+
+
+@pytest.mark.parametrize("model", ["dreame.mower.p2255", "dreame.mower.x1234"])
+def test_person_detection_at_the_station_is_unchanged_on_other_models(
+    model: str,
+) -> None:
+    snapshot = _snapshot(
+        27, "human_detected", realtime_error_code=27, state="CHARGING", model=model
+    )
+
+    assert snapshot.activity == "error"
+    assert snapshot.error_code == 27
+    assert snapshot.fault_state_clear is False
+
+
+def test_fault_state_is_clear_only_when_a_code_was_read_without_a_fault() -> None:
+    model = "mova.mower.g2529c"
+    # Nothing read yet (the LiDAX after a restart): unknown, never clear.
+    unread = _snapshot(None, "", state="CHARGING", model=model)
+    assert unread.activity == "docked"
+    assert unread.fault_state_clear is False
+    # No device code, or a non-fault notice: clear.
+    assert _snapshot(-1, "", state="CHARGING", model=model).fault_state_clear is True
+    assert _snapshot(50, "", state="CHARGING", model=model).fault_state_clear is True
+    # On MOVA a raw 0 is "robot lifted", a hard fault.
+    assert _snapshot(0, "", state="CHARGING", model=model).fault_state_clear is False
+    # A retained fault released after observed recovery is clear.
+    fault = _snapshot(0, "drop")
+    recovered = _snapshot(0, "drop", state="CHARGING", previous_snapshot=fault)
+    assert fault.fault_state_clear is False
+    assert recovered.activity == "docked"
+    assert recovered.fault_state_clear is True
+
+
 def test_operational_state_releases_stale_realtime_only_fault() -> None:
     fault = _snapshot(0, "drop")
     snapshot = _snapshot(

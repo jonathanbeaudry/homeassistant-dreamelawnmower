@@ -57,6 +57,18 @@ MOWER_MOWING_STATES: Final = frozenset(
 )
 
 
+# Firmware states that place the mower on its charging station.
+MOWER_CHARGING_STATES: Final = frozenset(
+    {
+        "charging",
+        "charging_completed",
+        "smart_charging",
+        "charging_paused_high_temperature",
+        "charging_paused_low_temperature",
+    }
+)
+
+
 def supports_operational_human_detection(model: str | None) -> bool:
     """Return whether field evidence confirms person avoidance while mowing."""
     return str(model or "").strip().casefold() in _OPERATIONAL_HUMAN_DETECTION_MODELS
@@ -65,10 +77,15 @@ def supports_operational_human_detection(model: str | None) -> bool:
 def mower_operational_human_detection_notice(
     code: object, *, model: str | None, state: str | None
 ) -> bool:
-    """Recognize code 27 as a notice only on confirmed models still mowing."""
+    """Recognize code 27 as a notice on confirmed models mowing or charging.
+
+    These mowers avoid the person and carry on, then keep reporting 27 after
+    they return to the station; a mower halted for a person stays out on the
+    lawn (paused or error), where the code remains a hard fault.
+    """
     return bool(
         mower_device_code(code) == 27
-        and state in MOWER_MOWING_STATES
+        and (state in MOWER_MOWING_STATES or state in MOWER_CHARGING_STATES)
         and supports_operational_human_detection(model)
     )
 

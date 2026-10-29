@@ -37,7 +37,7 @@ def eligible_evidence():
         docked=True,
         task_resumable=False,
         mowing_session_active=False,
-        error_code=0,
+        fault_state_clear=True,
         child_lock=False,
         battery_level=80,
     )
@@ -69,7 +69,8 @@ def eligible_evidence():
         ("mowing_session_active", None, "active_or_unknown_task"),
         ("battery_level", None, "battery_unknown"),
         ("battery_level", 29, "battery_below_threshold_or_invalid"),
-        ("error_code", None, "fault_or_unknown_fault_state"),
+        ("fault_state_clear", None, "fault_or_unknown_fault_state"),
+        ("fault_state_clear", False, "fault_or_unknown_fault_state"),
         ("child_lock", True, "child_lock_enabled"),
     ],
 )
@@ -78,6 +79,28 @@ def test_unknown_or_blocked_mower_state_has_a_skip_reason(field, value, reason):
     setattr(snapshot, field, value)
     assert (
         schedule_start.scheduled_start_block_reason(snapshot, weather, native) == reason
+    )
+
+
+def test_the_guard_reads_the_snapshots_fault_judge_and_nothing_else():
+    snapshot, weather, native = eligible_evidence()
+    # A raw 0 is a hard fault on some families: the code alone never decides.
+    snapshot.error_code = 0
+    snapshot.fault_state_clear = False
+    assert (
+        schedule_start.scheduled_start_block_reason(snapshot, weather, native)
+        == "fault_or_unknown_fault_state"
+    )
+    # A retained notice reads as no error code, and is clear.
+    snapshot.error_code = None
+    snapshot.fault_state_clear = True
+    assert (
+        schedule_start.scheduled_start_block_reason(snapshot, weather, native) is None
+    )
+    del snapshot.fault_state_clear
+    assert (
+        schedule_start.scheduled_start_block_reason(snapshot, weather, native)
+        == "fault_or_unknown_fault_state"
     )
 
 

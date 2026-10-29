@@ -1778,6 +1778,8 @@ def test_authoritative_native_read_rejects_incomplete_evidence(monkeypatch, fail
             device = client._ensure_device()
             device._ready = True
             device.data = {prop.value: 0 for prop in required}
+            # A known device code: the fault-code cloud fallback stays idle.
+            device.data[device_module.DreameMowerProperty.ERROR.value] = -1
             device._last_settings_request = 10**20
             previous = {"legacy_task_status": 6, "received_at": 0}
             device._fresh_task_state = dict(previous)
@@ -1842,6 +1844,11 @@ def test_authoritative_read_fails_closed_before_network_when_blocked(blocked):
 
 @pytest.mark.parametrize("stop", ["cancel", "close"])
 def test_authoritative_snapshot_worker_remains_owned_until_finished(stop):
+    from custom_components.dreame_lawn_mower.dreame_lawn_mower_client.device_types import (  # noqa: E501
+        DreameMowerProperty,
+    )
+
+    ERROR_PROPERTY = DreameMowerProperty.ERROR
     from threading import Event
     from unittest.mock import AsyncMock
 
@@ -1858,6 +1865,7 @@ def test_authoritative_snapshot_worker_remains_owned_until_finished(stop):
                 ), session=session,
             )
             device = client._ensure_device()
+            device.data[ERROR_PROPERTY.value] = -1
             client._async_update_device = AsyncMock(return_value=device)
 
             def snapshot(_device, **_kwargs):
@@ -2485,3 +2493,53 @@ def test_native_settings_cancel_without_followup_reads(monkeypatch, stop, phase)
                 await client.async_close()
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("cloud", ["value", "known", "failure", "missing"])
+def test_authoritative_read_backfills_an_unread_fault_code_from_the_cloud(cloud):
+    from threading import Event
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from custom_components.dreame_lawn_mower.dreame_lawn_mower_client.device_types import (  # noqa: E501
+        DreameMowerProperty,
+    )
+
+    error = DreameMowerProperty.ERROR
+
+    async def scenario():
+        async with ClientSession() as session:
+            client = DreameLawnMowerClient(
+                **OPTIONS,
+                descriptor=DreameLawnMowerDescriptor(
+                    did="42", name="Garden", model="mova.mower.g2529c",
+                    display_model="LiDAX", account_type="mova", country="eu",
+                ), session=session,
+            )
+            device = client._ensure_device()
+            if cloud == "known":
+                device.data[error.value] = -1
+            reader = SimpleNamespace(
+                async_get_properties=AsyncMock(
+                    side_effect=DreameLawnMowerConnectionError("offline")
+                    if cloud == "failure"
+                    else None,
+                    return_value=(
+                        [{"key": "2.2", "value": "27"}] if cloud == "value" else []
+                    ),
+                )
+            )
+            try:
+                await client._async_backfill_fault_code(reader, device, Event())
+            finally:
+                await client.async_close()
+            return device, reader
+
+    device, reader = asyncio.run(scenario())
+    if cloud == "known":
+        reader.async_get_properties.assert_not_awaited()
+        assert device.data[error.value] == -1
+    else:
+        reader.async_get_properties.assert_awaited_once()
+        assert reader.async_get_properties.await_args.args == ("42", "2.2")
+        assert device.data.get(error.value) == (27 if cloud == "value" else None)

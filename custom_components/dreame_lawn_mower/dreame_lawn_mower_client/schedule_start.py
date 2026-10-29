@@ -34,7 +34,8 @@ def scheduled_start_block_reason(
         or getattr(snapshot, "task_resumable", None) is not True
     ):
         return "owned_paused_task_unknown"
-    if getattr(snapshot, "error_code", None) != 0:
+    # The snapshot is the one judge of fault state: unknown blocks.
+    if getattr(snapshot, "fault_state_clear", None) is not True:
         return "fault_or_unknown_fault_state"
     if getattr(snapshot, "child_lock", None) is True:
         return "child_lock_enabled"

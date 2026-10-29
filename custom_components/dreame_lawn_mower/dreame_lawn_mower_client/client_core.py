@@ -44,6 +44,7 @@ from .exceptions import (
 )
 from .firmware_approval import firmware_approval_result
 from .models import (
+    REALTIME_ERROR_PROPERTY_KEY,
     DreameLawnMowerFirmwareUpdateSupport,
     DreameLawnMowerMapView,
     DreameLawnMowerRemoteControlSupport,
@@ -189,6 +190,57 @@ class _DreameLawnMowerClientCoreMixin(_DreameLawnMowerClientTransport):
             "Refresh the mower state before trying again."
         ) from original_error
 
+    async def _async_backfill_fault_code(
+        self,
+        cloud: DreameCloudSession,
+        device: Any,
+        cancelled: Event,
+        *,
+        deadline: float | None = None,
+    ) -> None:
+        """Read the cloud's last reported fault code when the device sent none.
+
+        Some mowers (a MOVA LiDAX Ultra 1000) push only their heartbeat and
+        answer no device-code read, so after a restart the fault state stays
+        unknown and every guarded decision fails closed. The cloud keeps the
+        code the mower last reported; a failed read leaves it unknown.
+        """
+        from .client_refresh import _run_state_worker
+        from .device_code_semantics import mower_device_code
+        from .device_types import DreameMowerProperty
+
+        prop = DreameMowerProperty.ERROR
+        mapping = getattr(device, "property_mapping", {}).get(prop)
+        if (
+            mapping is None
+            or prop.value in device.data
+            or REALTIME_ERROR_PROPERTY_KEY in (device.realtime_properties or {})
+        ):
+            return
+        try:
+            response = await cloud.async_get_properties(
+                self._descriptor.did, REALTIME_ERROR_PROPERTY_KEY, deadline=deadline,
+            )
+        except DreameLawnMowerConnectionError:
+            return
+        code = next(
+            (
+                mower_device_code(entry.get("value"))
+                for entry in self._normalize_cloud_property_entries(response)
+                if str(entry.get("key")) == REALTIME_ERROR_PROPERTY_KEY
+            ),
+            None,
+        )
+        if code is None:
+            return
+        row = {"did": str(prop.value), **mapping, "code": 0, "value": code}
+
+        def apply() -> None:
+            if prop.value not in device.data:
+                device._handle_properties([row])
+
+        await _run_state_worker(apply, cancelled)
+
     async def _async_refresh_authoritative_snapshot(
         self,
         *,
@@ -204,6 +256,9 @@ class _DreameLawnMowerClientCoreMixin(_DreameLawnMowerClientTransport):
             try:
                 device = await self._async_update_device(
                     force_request_properties=True, deadline=deadline,
+                )
+                await self._async_backfill_fault_code(
+                    _cloud, device, cancelled, deadline=deadline,
                 )
 
                 def require_active() -> None:
